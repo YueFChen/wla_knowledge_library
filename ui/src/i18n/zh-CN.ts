@@ -1,0 +1,145 @@
+/**
+ * 千星奇域知识库的界面文案（B7）。
+ *
+ * 键 = `<域>.<语义>`，域取界面区块名（toolbar / tree / search / doc / page / mirror / mcp / common），
+ * 段内 camelCase；多处复用的归 `common.*`。约定见 docs/知识库早期调研与评测.md §8.1。
+ */
+export const zh = {
+  // 顶部工具区
+  'toolbar.docs': '{count} 篇文档',
+  'toolbar.updated': '更新于 {time}',
+  'toolbar.age': '{days} 天前',
+  'toolbar.stale': '已过期，建议更新',
+  'toolbar.fetched': '目录已更新：{documents} 篇（{bytes}）',
+  'toolbar.missing': '本地还没有知识库目录：先获取目录，再在后台并行构建页面镜像。',
+  'toolbar.fetch': '获取目录',
+  'toolbar.refresh': '更新目录',
+  'toolbar.fetching': '正在更新目录…',
+  'toolbar.mirror': '构建镜像库',
+  'toolbar.cancel': '停下',
+  'toolbar.openCacheDir': '打开缓存目录',
+  'toolbar.mcp': '接入 MCP',
+
+  // 左侧目录树
+  'tree.title': '知识库目录',
+  'tree.total': '共 {count} 篇',
+  'tree.filter': '过滤标题…',
+  'tree.empty': '没有匹配的文档。',
+
+  // 检索
+  'search.submit': '检索',
+  'search.searching': '正在匹配…',
+  'search.needQuery': '请先输入问题。',
+  'search.empty': '没有命中：知识库里可能确实没有这份资料，换个说法再试。',
+  'search.placeholder': '搜索节点、Lua API、UI、运动器方案或直接描述问题…',
+  'search.matchHint': '自动综合精确匹配、关键词近似匹配；本地模型可用时补充语义检索。',
+
+  // 命中与块共用的字段
+  'hit.candidate_node': '节点命中',
+  'hit.candidate_doc': '文档命中',
+  'hit.sparse': '全文检索',
+  'hit.vector': '语义检索',
+  'hit.server': '服务端',
+  'hit.client': '客户端',
+  'hit.both': '双端',
+
+  // 右侧内容区
+  'doc.placeholder': '从左侧目录选一篇，或在上面的搜索栏提问。',
+  'doc.back': '返回',
+  'doc.notMirrored': '本篇还没有镜像：镜像后按官方排版显示（一篇十余秒）。',
+
+  // 本地嵌入模型
+  'embedding.title': '本地模型配置',
+  'embedding.summary': '手动加载后，本地 Embedding 会补充语义召回，与关键词检索一起排序；查询内容在本机完成向量化。',
+  'embedding.currentTitle': '本机模型',
+  'embedding.loading': '正在检查模型目录与运行状态…',
+  'embedding.manualOnly': '模型不会自动运行',
+  'embedding.active': '当前应用进程已加载模型，正在参与检索。',
+  'embedding.inactive': '模型尚未加载，检索使用关键词召回。需要时可在此手动加载并建立向量索引。',
+  'embedding.loadAndBuild': '手动加载并建立索引',
+  'embedding.disable': '停用',
+  'embedding.recheck': '重新检测',
+  'embedding.incomplete': '缺少文件',
+  'embedding.loaded': '运行中',
+  'embedding.ready': '文件齐全，未运行',
+  'embedding.unsupported': '已发现，尚未接入',
+  'embedding.missingFiles': '缺少',
+  'embedding.manualNotice': '应用启动、知识库更新或首次检索都不会运行模型或构建向量索引。MCP 进程也不会自动加载本地模型。',
+  'embedding.requiredTitle': '选择模型时需要满足',
+  'embedding.requiredLocal': '能在本机离线运行 Embedding 推理，不依赖远端向量服务。',
+  'embedding.requiredChinese': '对中文节点名、API、UI 配置和描述有合适的语义表达能力。',
+  'embedding.requiredCompatible': '文档和查询使用兼容的模型与向量维度，并提供对应的运行时和 tokenizer。',
+  'embedding.recommendedTitle': '推荐起步方案：BGE-small-zh-v1.5',
+  'embedding.recommendedText': '中文检索模型，体量适中，适合作为起步选择。当前版本提供 BGE 的 ONNX 预设；其他模型也可满足上面的通用要求，但需先接入其运行时、tokenizer、向量维度与缓存标识。',
+  'embedding.onnxSource': '打开 ONNX 模型仓库',
+  'embedding.modelSource': '打开 BAAI 模型说明',
+  'embedding.presetDetails': '查看当前 BGE 预设的安装目录与文件清单',
+  'embedding.presetNote': '把模型文件放入以下目录，再回到模型管理窗口手动加载并建立向量索引。',
+  'embedding.fallback': '模型或向量索引不可用时，会使用关键词检索；本地向量索引保存在缓存目录。',
+
+  // 页面还原
+  'page.toc': '文章大纲',
+  'page.imageFailed': '图片没加载出来（官方 CDN 不可达或该图已下线）',
+
+  // 页面镜像
+  'mirror.mirrored': '已镜像 {mirrored} / {total} 篇',
+  'mirror.outdated': '{count} 篇官方已更新，需要重镜像',
+  'mirror.preparing': '正在启动后台镜像任务…',
+  'mirror.progress': '已处理 {done}/{total}',
+  'mirror.completed': '最近完成：{title}',
+  'mirror.skipped': '跳过（已是新的）',
+  'mirror.failed': '失败：{reason}',
+  'mirror.done': '本次：新增 {mirrored} · 跳过 {skipped} · 失败 {failed}',
+  'mirror.mirrorThis': '镜像本篇',
+  'mirror.mirroring': '正在镜像本篇…',
+  'mirror.mirroredAt': '镜像于 {time}',
+
+  // MCP 接入
+  'mcp.title': '接入外部 AI 客户端',
+  'mcp.description':
+    '选择客户端并复制对应配置。接入的是本机只读知识库工具，外部 Agent 仍负责理解问题和决定何时检索。',
+  'mcp.clientSelect': '选择 AI 客户端',
+  'mcp.client.generic': '通用',
+  'mcp.client.codex': 'Codex',
+  'mcp.client.workbuddy': 'WorkBuddy',
+  'mcp.client.trae': 'Trae',
+  'mcp.generic.title': '通用 stdio MCP',
+  'mcp.generic.summary': '适用于支持标准 MCP JSON 配置的桌面 Agent 与编辑器。',
+  'mcp.generic.step1': '确认下方二进制路径存在，并已在本应用中获取目录、构建所需镜像。',
+  'mcp.generic.step2': '在客户端的 MCP 设置中新增本地 stdio 服务，粘贴下方 JSON。',
+  'mcp.generic.step3': '重启或刷新 MCP 服务，确认 wonderland-knowledge 已连接且工具可见。',
+  'mcp.codex.title': 'Codex（CLI / IDE）',
+  'mcp.codex.summary': 'Codex 使用 TOML；可写入用户级 ~/.codex/config.toml，或可信项目下的 .codex/config.toml。',
+  'mcp.codex.step1': '打开 Codex 的 MCP 设置，或打开对应的 config.toml。',
+  'mcp.codex.step2': '合并下方 TOML 段落；不要覆盖文件中已有的模型、权限或其他 MCP 配置。',
+  'mcp.codex.step3': '重启会话后使用 /mcp 检查连接，再发送下方验证问题。',
+  'mcp.workbuddy.title': '腾讯 WorkBuddy',
+  'mcp.workbuddy.summary': '本地连接器使用 stdio；下方内容可作为连接器的 mcp.json，且一个连接器只声明这一项服务。',
+  'mcp.workbuddy.step1': '进入连接器管理，新建自定义本地连接器；若使用连接器目录，请创建 mcp.json。',
+  'mcp.workbuddy.step2': '粘贴下方配置，保存并启用连接器。首次连接时确认允许启动本地程序。',
+  'mcp.workbuddy.step3': '新建对话并发送下方验证问题；需要强制验证时，明确要求只查知识库、不要联网。',
+  'mcp.trae.title': 'Trae / TraeCode',
+  'mcp.trae.summary': 'Trae 支持在设置中手动添加，也支持可信项目内的 .trae/mcp.json。',
+  'mcp.trae.step1': '打开设置 → MCP → 添加 → 手动添加，并选择原始配置（JSON）。',
+  'mcp.trae.step2': '粘贴下方 JSON；也可保存为项目根目录的 .trae/mcp.json 并启用项目级 MCP。',
+  'mcp.trae.step3': '确认服务已启用且日志无报错，然后在 Agent 对话中发送下方验证问题。',
+  'mcp.configTitle': '客户端配置',
+  'mcp.binaryPath': '二进制：{path}',
+  'mcp.binaryMissing': '未在应用目录找到 {name}：安装版会把它与主程序放在同一目录。',
+  'mcp.copy': '复制配置片段',
+  'mcp.copied': '已复制',
+  'mcp.copyFailed': '复制失败，请手动选中复制。',
+  'mcp.verifyTitle': '验证自然语言调用',
+  'mcp.verifyDescription': '先用带明确数据源约束的问题验证工具路由；成功后可省略“不要联网”等限定。',
+  'mcp.testPrompt': '请只查询 Wonderland 知识库，不要联网搜索：建立字典节点有哪些参数？请给出命中的文档标题。',
+  'mcp.copyPrompt': '复制验证问题',
+  'mcp.promptCopied': '问题已复制',
+  'mcp.routingHint': '若 Agent 仍走联网搜索：检查 MCP 是否已启用、工具是否出现在会话中，并在该 Agent 的规则或 Skill 中写明“涉及千星奇域/Wonderland 时优先调用 wonderland-knowledge”。',
+  'mcp.readOnly': '服务按 stdio 由客户端拉起：不监听端口、不常驻后台，也不接触任何账号凭据。',
+
+  // 跨区块复用
+  'common.failed': '操作失败',
+  'common.loading': '正在读取…',
+  'common.openSource': '查看原文',
+  'common.close': '关闭',
+} as const

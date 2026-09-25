@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "$defs": {
+    "empty": { "type": "object", "additionalProperties": false },
+    "result": { "type": ["object", "array", "string", "integer", "number", "boolean", "null"] }
+  },
+  "methods": {
+    "status": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 30000 },
+    "embedding_status": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 30000 },
+    "activate_embeddings": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 86400000 },
+    "disable_embeddings": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 30000 },
+    "recheck_embeddings": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 30000 },
+    "refresh": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 60000 },
+    "search": { "params": { "type": "object", "required": ["queries", "top_k"], "properties": { "queries": { "type": "array", "items": { "type": "string", "maxLength": 10000 }, "minItems": 1, "maxItems": 20 }, "top_k": { "type": "integer", "minimum": 1, "maximum": 20 } }, "additionalProperties": false }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 60000 },
+    "docs": { "params": { "type": "object", "required": ["keywords"], "properties": { "keywords": { "type": "array", "items": { "type": "string", "maxLength": 200 }, "maxItems": 50 } }, "additionalProperties": false }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 30000 },
+    "open_source": { "params": { "type": "object", "required": ["path_id"], "properties": { "path_id": { "type": "string", "maxLength": 128 } }, "additionalProperties": false }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 10000 },
+    "open_model_source": { "params": { "type": "object", "required": ["source"], "properties": { "source": { "enum": ["onnx", "model"] } }, "additionalProperties": false }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 10000 },
+    "reveal_cache_dir": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 10000 },
+    "mirror_status": { "params": { "$ref": "#/$defs/empty" }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 10000 },
+    "mirror_start": { "params": { "type": "object", "required": ["limit"], "properties": { "limit": { "type": ["integer", "null"], "minimum": 0, "maximum": 1000 } }, "additionalProperties": false }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 86400000 },
+    "page": { "params": { "type": "object", "required": ["path_id"], "properties": { "path_id": { "type": "string", "maxLength": 128 } }, "additionalProperties": false }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 30000 },
+    "mirror_page": { "params": { "type": "object", "required": ["path_id"], "properties": { "path_id": { "type": "string", "maxLength": 128 } }, "additionalProperties": false }, "result": { "$ref": "#/$defs/result" }, "timeoutMs": 120000 }
+  },
+  "events": {
+    "mirror.progress": { "payload": { "type": "object", "required": ["path_id", "title", "done", "total", "mirrored", "elements", "tables", "images"], "additionalProperties": true } }
+  }
+}
