@@ -105,7 +105,7 @@ fn prepare(cache: &KnowledgeCache) -> Result<wonderland_knowledge::KnowledgeBase
     if pages.is_empty() {
         return Err(NO_MIRROR.to_owned());
     }
-    let mut kb = build_from_json(&bundle.catalog, &pages).map_err(|error| error.to_string())?;
+    let kb = build_from_json(&bundle.catalog, &pages).map_err(|error| error.to_string())?;
     // MCP 启动不触发模型执行；本地模型只能由桌面模型管理窗口显式加载。
     Ok(kb)
 }

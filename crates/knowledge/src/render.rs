@@ -15,8 +15,8 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::model::DETAIL_URL;
-use wonderland_plugin_sdk::PluginFailure;
 use tracing::{debug, warn};
+use wonderland_plugin_sdk::PluginFailure;
 
 /// 默认等待渲染的虚拟时间预算（毫秒）。官方详情页是 SPA，需要等 XHR 与首屏渲染。
 pub const DEFAULT_WAIT_MS: u64 = 15_000;
@@ -29,7 +29,10 @@ pub fn detail_url(path_id: &str) -> String {
 /// 用本机 Edge 无头渲染并 dump DOM。
 pub fn dump_dom(url: &str, wait_ms: u64) -> Result<String, PluginFailure> {
     let edge = find_edge().ok_or_else(|| {
-        PluginFailure::Other("未找到本机 Edge（msedge.exe），渲染通道不可用".to_owned())
+        PluginFailure::Other(
+            "未找到 Microsoft Edge（msedge.exe）。请确认已安装 Edge，或设置 WONDERLAND_EDGE_PATH 指向 msedge.exe；镜像渲染通道不可用"
+                .to_owned(),
+        )
     })?;
     let profile = unique_temp_dir();
     let mut command = Command::new(&edge);
@@ -93,12 +96,72 @@ fn hide_child_window(_command: &mut Command) {}
 
 fn find_edge() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    for key in ["ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA"] {
+    for key in ["WONDERLAND_EDGE_PATH", "EDGE_PATH"] {
+        if let Some(path) = std::env::var_os(key) {
+            let path = PathBuf::from(path);
+            candidates.push(PathBuf::from(
+                path.to_string_lossy().trim().trim_matches('"'),
+            ));
+        }
+    }
+    for key in [
+        "ProgramFiles(x86)",
+        "ProgramFiles",
+        "ProgramW6432",
+        "LOCALAPPDATA",
+    ] {
         if let Ok(base) = std::env::var(key) {
             candidates.push(PathBuf::from(base).join("Microsoft/Edge/Application/msedge.exe"));
         }
     }
-    candidates.into_iter().find(|path| path.is_file())
+    if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+        return Some(path);
+    }
+
+    #[cfg(windows)]
+    if let Some(path) = edge_from_app_paths() {
+        return Some(path);
+    }
+
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|directory| directory.join("msedge.exe"))
+            .find(|path| path.is_file())
+    })
+}
+
+/// Edge 可通过 App Paths 注册自定义安装目录，不能只依赖 Program Files 下的默认位置。
+#[cfg(windows)]
+fn edge_from_app_paths() -> Option<PathBuf> {
+    const APP_PATH_KEYS: [&str; 3] = [
+        r"HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
+        r"HKLM\Software\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
+        r"HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe",
+    ];
+    let reg_exe = std::env::var_os("SystemRoot")
+        .map(|root| PathBuf::from(root).join("System32/reg.exe"))
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| PathBuf::from("reg.exe"));
+
+    APP_PATH_KEYS.iter().find_map(|key| {
+        let mut command = Command::new(&reg_exe);
+        command.args(["query", key, "/ve"]);
+        hide_child_window(&mut command);
+        let output = command.output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let value = stdout.lines().find_map(|line| {
+            ["REG_SZ", "REG_EXPAND_SZ"].iter().find_map(|kind| {
+                line.find(kind)
+                    .map(|position| line[position + kind.len()..].trim().trim_matches('"'))
+            })
+        })?;
+        let path = PathBuf::from(value);
+        path.is_file().then_some(path)
+    })
 }
 
 fn unique_temp_dir() -> PathBuf {

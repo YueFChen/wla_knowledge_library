@@ -9,6 +9,7 @@
  */
 
 .ka {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -16,6 +17,7 @@
      高度不够时（极窄的窗口）退回整体滚动，靠下面的 min-height 兜底。 */
   height: 100%;
   min-height: 0;
+  padding-inline: var(--app-page-gutter, 24px);
   overflow: auto;
 }
 
