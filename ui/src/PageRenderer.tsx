@@ -82,6 +82,14 @@ function Block({ element, onOpenDoc }: { element: PageElement; onOpenDoc: (pathI
       )
     case 'image':
       return <Figure src={element.src} width={element.width} />
+    case 'video_link':
+      return (
+        <p className="ka-p">
+          <a className="ka-external-link" href={element.url} rel="noreferrer">
+            {t('page.openVideo')}
+          </a>
+        </p>
+      )
     case 'divider':
       return <hr className="ka-hr" />
     default:
@@ -124,6 +132,20 @@ function Runs({ runs, onOpenDoc }: { runs: PageRun[]; onOpenDoc?: (pathId: strin
             >
               {run.text}
             </button>
+          )
+        }
+        if (run.link) {
+          return (
+            <a key={index} className="ka-external-link" href={run.link} rel="noreferrer">
+              {run.text}
+            </a>
+          )
+        }
+        if (run.link) {
+          return (
+            <a key={index} className="ka-external-link" href={run.link} rel="noreferrer">
+              {run.text}
+            </a>
           )
         }
         const marks = [run.bold ? 'ka-b' : '', run.italic ? 'ka-i' : ''].filter(Boolean).join(' ')

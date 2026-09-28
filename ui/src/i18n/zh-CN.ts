@@ -19,7 +19,6 @@ export const zh = {
   'toolbar.cancel': '停下',
   'toolbar.openCacheDir': '打开缓存目录',
   'toolbar.mcp': '接入 MCP',
-
   // 左侧目录树
   'tree.title': '知识库目录',
   'tree.total': '共 {count} 篇',
@@ -50,12 +49,12 @@ export const zh = {
 
   // 本地嵌入模型
   'embedding.title': '本地模型配置',
-  'embedding.summary': '手动加载后，本地 Embedding 会补充语义召回，与关键词检索一起排序；查询内容在本机完成向量化。',
+  'embedding.summary': '存在与当前文档和模型匹配的本地向量索引时会自动启用语义召回；没有匹配索引时不会自动构建。手动启用可建立或重建索引。',
   'embedding.currentTitle': '本机模型',
   'embedding.loading': '正在检查模型目录与运行状态…',
   'embedding.manualOnly': '模型不会自动运行',
   'embedding.active': '当前应用进程已加载模型，正在参与检索。',
-  'embedding.inactive': '模型尚未加载，检索使用关键词召回。需要时可在此手动加载并建立向量索引。',
+  'embedding.inactive': '没有可用的匹配索引，检索使用关键词召回。需要时可在此手动建立向量索引。',
   'embedding.loadAndBuild': '手动加载并建立索引',
   'embedding.disable': '停用',
   'embedding.recheck': '重新检测',
@@ -64,7 +63,7 @@ export const zh = {
   'embedding.ready': '文件齐全，未运行',
   'embedding.unsupported': '已发现，尚未接入',
   'embedding.missingFiles': '缺少',
-  'embedding.manualNotice': '应用启动、知识库更新或首次检索都不会运行模型或构建向量索引。MCP 进程也不会自动加载本地模型。',
+  'embedding.manualNotice': '应用启动、知识库更新或首次检索不会构建向量索引；找到与当前语料及模型匹配的已有索引时，会自动加载模型。MCP 也只复用匹配的已有索引。',
   'embedding.requiredTitle': '选择模型时需要满足',
   'embedding.requiredLocal': '能在本机离线运行 Embedding 推理，不依赖远端向量服务。',
   'embedding.requiredChinese': '对中文节点名、API、UI 配置和描述有合适的语义表达能力。',
@@ -74,12 +73,13 @@ export const zh = {
   'embedding.onnxSource': '打开 ONNX 模型仓库',
   'embedding.modelSource': '打开 BAAI 模型说明',
   'embedding.presetDetails': '查看当前 BGE 预设的安装目录与文件清单',
-  'embedding.presetNote': '把模型文件放入以下目录，再回到模型管理窗口手动加载并建立向量索引。',
+  'embedding.presetNote': '把模型文件放入以下目录；如没有匹配的向量索引，可在模型管理窗口手动启用并建立索引。',
   'embedding.fallback': '模型或向量索引不可用时，会使用关键词检索；本地向量索引保存在缓存目录。',
 
   // 页面还原
   'page.toc': '文章大纲',
   'page.imageFailed': '图片没加载出来（官方 CDN 不可达或该图已下线）',
+  'page.openVideo': '打开视频链接',
 
   // 页面镜像
   'mirror.mirrored': '已镜像 {mirrored} / {total} 篇',
@@ -97,7 +97,7 @@ export const zh = {
   // MCP 接入
   'mcp.title': '接入外部 AI 客户端',
   'mcp.description':
-    '选择客户端并复制对应配置。接入的是本机只读知识库工具，外部 Agent 仍负责理解问题和决定何时检索。',
+    '选择客户端并复制配置，即可让 Agent 查询千星奇域官方文档。服务仅提供本机只读检索，由 Agent 理解问题并调用合适的工具。',
   'mcp.clientSelect': '选择 AI 客户端',
   'mcp.client.generic': '通用',
   'mcp.client.codex': 'Codex',
@@ -114,10 +114,10 @@ export const zh = {
   'mcp.codex.step2': '合并下方 TOML 段落；不要覆盖文件中已有的模型、权限或其他 MCP 配置。',
   'mcp.codex.step3': '重启会话后使用 /mcp 检查连接，再发送下方验证问题。',
   'mcp.workbuddy.title': '腾讯 WorkBuddy',
-  'mcp.workbuddy.summary': '本地连接器使用 stdio；下方内容可作为连接器的 mcp.json，且一个连接器只声明这一项服务。',
+  'mcp.workbuddy.summary': 'WorkBuddy 通过 stdio 启动本地服务。下方配置可用于自定义连接器；每个连接器只需配置本服务。',
   'mcp.workbuddy.step1': '进入连接器管理，新建自定义本地连接器；若使用连接器目录，请创建 mcp.json。',
   'mcp.workbuddy.step2': '粘贴下方配置，保存并启用连接器。首次连接时确认允许启动本地程序。',
-  'mcp.workbuddy.step3': '新建对话并发送下方验证问题；需要强制验证时，明确要求只查知识库、不要联网。',
+  'mcp.workbuddy.step3': '新建对话并发送下方验证问题，确认客户端可以调用知识库工具。',
   'mcp.trae.title': 'Trae / TraeCode',
   'mcp.trae.summary': 'Trae 支持在设置中手动添加，也支持可信项目内的 .trae/mcp.json。',
   'mcp.trae.step1': '打开设置 → MCP → 添加 → 手动添加，并选择原始配置（JSON）。',
@@ -130,11 +130,10 @@ export const zh = {
   'mcp.copied': '已复制',
   'mcp.copyFailed': '复制失败，请手动选中复制。',
   'mcp.verifyTitle': '验证自然语言调用',
-  'mcp.verifyDescription': '先用带明确数据源约束的问题验证工具路由；成功后可省略“不要联网”等限定。',
-  'mcp.testPrompt': '请只查询 Wonderland 知识库，不要联网搜索：建立字典节点有哪些参数？请给出命中的文档标题。',
+  'mcp.verifyDescription': '发送示例问题，确认客户端可以调用千星奇域知识库并返回文档出处。',
+  'mcp.testPrompt': '请查询千星奇域知识库：建立字典节点有哪些参数？请列出参数并附上来源文档标题。',
   'mcp.copyPrompt': '复制验证问题',
   'mcp.promptCopied': '问题已复制',
-  'mcp.routingHint': '若 Agent 仍走联网搜索：检查 MCP 是否已启用、工具是否出现在会话中，并在该 Agent 的规则或 Skill 中写明“涉及千星奇域/Wonderland 时优先调用 wonderland-knowledge”。',
   'mcp.readOnly': '服务按 stdio 由客户端拉起：不监听端口、不常驻后台，也不接触任何账号凭据。',
 
   // 跨区块复用

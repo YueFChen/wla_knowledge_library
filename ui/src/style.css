@@ -985,6 +985,17 @@
   border-radius: 0.5rem;
 }
 
+.ka-external-link {
+  color: var(--app-link, var(--app-ink));
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.ka-external-link:hover {
+  color: var(--app-ink);
+}
+
 /* 表格：官方给列宽就照用，宽了横向滚动而不是压扁单元格。 */
 .ka-table-wrap {
   margin: 0.7rem 0;

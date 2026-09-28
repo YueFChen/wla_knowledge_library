@@ -131,7 +131,6 @@ export function McpPanel({ status, onClose }: Props) {
             </div>
             <p className="ka-hint">{t('mcp.verifyDescription')}</p>
             <blockquote className="ka-prompt">{t('mcp.testPrompt')}</blockquote>
-            <p className="ka-hint">{t('mcp.routingHint')}</p>
           </section>
 
           <p className="ka-hint">{t('mcp.readOnly')}</p>

@@ -20,7 +20,7 @@ pub const PROTOCOL_VERSION: &str = "2025-06-18";
 pub const SERVER_NAME: &str = "wonderland-knowledge";
 
 /// 给支持 MCP `instructions` 的客户端提供领域边界和调用准则。
-pub const SERVER_INSTRUCTIONS: &str = "千星奇域官方教程的本地只读知识库。用户询问节点名和参数时用 get_node；询问客户端 Lua UI 脚本 API 的接口、函数、类型、参数和返回值时用 search_lua_api；文档名明确时用 read_doc；直接查名称或概念时用 search；开放问题、方案分析和排障时用 rag_search。未命中可换词重试；工具失败表示查询失败，不表示官方资料不存在。";
+pub const SERVER_INSTRUCTIONS: &str = "这是千星奇域官方教程与接口文档的本地只读知识库。优先使用中文检索，并用中文回答；回答资料性问题时附上工具返回的原文链接，不要把未命中或查询失败当作官方资料不存在。询问节点名称、归属端或参数表时用 get_node；询问客户端界面脚本（Lua）的接口、函数、类型、参数或返回值时用 search_lua_api；已知文档名称或 path_id 时用 read_doc；查找明确名称或概念时用 search；开放问题、方案分析或排障时用 rag_search。未命中时可改用文档中的原词或相关术语重试。知识库只包含已镜像的官方页面，内容可能落后官网。";
 
 pub struct Server {
     /// 索引；目录或镜像缺失时为 `None`，此时只有 `reason` 可答。
@@ -173,7 +173,7 @@ mod tests {
         let listed = server
             .handle_line(r#"{"jsonrpc":"2.0","id":10,"method":"tools/list"}"#)
             .unwrap();
-        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 4);
+        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 6);
     }
 
     #[test]
@@ -215,7 +215,7 @@ mod tests {
         let listed = server
             .handle_line(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)
             .unwrap();
-        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 4);
+        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(), 6);
 
         let called = server
             .handle_line(r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search","arguments":{"queries":["建立字典"]}}}"#)

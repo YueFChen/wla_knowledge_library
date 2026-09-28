@@ -3,8 +3,8 @@
 use std::fs;
 use std::path::Path;
 
-use wonderland_plugin_sdk::PluginFailure;
 use wonderland_knowledge::{LOCAL_EMBEDDING_MODEL_DIR, LOCAL_EMBEDDING_MODEL_FILES};
+use wonderland_plugin_sdk::PluginFailure;
 
 use crate::KnowledgeModelInfo;
 
@@ -32,8 +32,8 @@ pub(crate) fn model_inventory(cache_dir: &Path) -> Result<Vec<KnowledgeModelInfo
         }
     };
     for entry in entries {
-        let entry =
-            entry.map_err(|error| PluginFailure::LocalData(format!("读取模型条目失败：{error}")))?;
+        let entry = entry
+            .map_err(|error| PluginFailure::LocalData(format!("读取模型条目失败：{error}")))?;
         let name = entry.file_name().to_string_lossy().into_owned();
         if name == LOCAL_EMBEDDING_MODEL_DIR || !entry.path().is_dir() {
             continue;

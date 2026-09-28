@@ -11,6 +11,7 @@
 //! | `div.table-wrapper > table`（`colgroup` 列宽 + 单元格 `colspan` / `rowspan`） | [`PageElement::Table`] |
 //! | `div.prosemirror-list-new`（每项一个，同级连续） | [`PageElement::List`] |
 //! | `img.lazy`（`src` 或 `data-src`，与官方静态资源同域） | [`PageElement::Image`] |
+//! | `video` / `iframe`（媒体 URL） | 指向原视频的链接，不下载媒体文件 |
 //! | `div.split-line` | [`PageElement::Divider`] |
 //!
 //! 三条边界：
@@ -27,7 +28,7 @@ use crate::dom::{Child, Node, parse};
 use crate::model::SITE_ROOT;
 
 /// 镜像产物的结构版本；参与缓存校验，元素含义或提取规则变化时必须递增。
-pub const PAGE_SCHEMA_VERSION: u32 = 1;
+pub const PAGE_SCHEMA_VERSION: u32 = 2;
 
 /// 一段连续文本及其内联样式。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,6 +116,10 @@ pub enum PageElement {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         width: Option<u32>,
     },
+    /// 视频源链接；镜像保存链接，不下载视频内容。
+    VideoLink {
+        url: String,
+    },
     Divider,
 }
 
@@ -188,6 +193,12 @@ fn walk(node: &Node, out: &mut Vec<PageElement>) {
                     out.push(image);
                 }
             }
+            "video" | "iframe" => {
+                flush(&mut loose, out);
+                if let Some(link) = video_link(block) {
+                    out.push(link);
+                }
+            }
             "svg" | "script" | "style" => {}
             _ if block.has_class("table-wrapper") => {
                 flush(&mut loose, out);
@@ -222,12 +233,21 @@ fn has_block(node: &Node) -> bool {
     node.children_nodes().any(|child| {
         matches!(
             child.tag.as_str(),
-            "p" | "div" | "table" | "section" | "img" | "h1" | "h2" | "h3" | "h4"
+            "p" | "div"
+                | "table"
+                | "section"
+                | "img"
+                | "video"
+                | "iframe"
+                | "h1"
+                | "h2"
+                | "h3"
+                | "h4"
         ) || has_block(child)
     })
 }
 
-/// 走一个内联容器，按顺序产出段落与图片。
+/// 走一个内联容器，按顺序产出段落、图片与视频链接。
 fn inline(node: &Node) -> Vec<PageElement> {
     let mut runs: Vec<PageRun> = Vec::new();
     let mut out: Vec<PageElement> = Vec::new();
@@ -273,6 +293,13 @@ fn collect(node: &Node, marks: Marks<'_>, runs: &mut Vec<PageRun>, out: &mut Vec
                 flush(runs, out);
                 if let Some(image) = image(node) {
                     out.push(image);
+                }
+                continue;
+            }
+            "video" | "iframe" => {
+                flush(runs, out);
+                if let Some(link) = video_link(node) {
+                    out.push(link);
                 }
                 continue;
             }
@@ -383,7 +410,7 @@ fn table(wrapper: &Node) -> Option<PageElement> {
     Some(PageElement::Table { columns, rows })
 }
 
-/// 单元格内容：文字走内联，图片单独收（「示意」列整列都是图）。
+/// 单元格内容：文字走内联，图片单独收（「示意」列整列都是图），视频转换成链接文本。
 fn cell_content(cell: &Node) -> (Vec<PageRun>, Vec<String>) {
     let mut runs: Vec<PageRun> = Vec::new();
     let mut blocks: Vec<PageElement> = Vec::new();
@@ -394,6 +421,7 @@ fn cell_content(cell: &Node) -> (Vec<PageRun>, Vec<String>) {
         match block {
             PageElement::Paragraph { runs: more } => runs.extend(more),
             PageElement::Image { src, .. } => images.push(src),
+            PageElement::VideoLink { url } => runs.push(link_run(url)),
             _ => {}
         }
     }
@@ -455,6 +483,7 @@ fn list_items(node: &Node, nested: &mut Vec<PageElement>) -> Vec<Vec<PageRun>> {
             for block in blocks {
                 match block {
                     PageElement::Paragraph { runs } => text.extend(runs),
+                    PageElement::VideoLink { url } => text.push(link_run(url)),
                     other => nested.push(other),
                 }
             }
@@ -493,6 +522,31 @@ fn image(node: &Node) -> Option<PageElement> {
         src: src.to_owned(),
         width: node.attr("style").and_then(width_of),
     })
+}
+
+/// 视频只保留可点击的源地址，不镜像媒体数据；兼容 video 的 `src` 和 source 子节点。
+fn video_link(node: &Node) -> Option<PageElement> {
+    let src = node
+        .attr("src")
+        .or_else(|| node.attr("data-src"))
+        .or_else(|| {
+            node.find(|child| child.tag == "source")
+                .and_then(|source| source.attr("src").or_else(|| source.attr("data-src")))
+        })
+        .filter(|value| link_of(value).is_some())?;
+    Some(PageElement::VideoLink {
+        url: absolute_link(src),
+    })
+}
+
+fn link_run(url: String) -> PageRun {
+    PageRun {
+        text: "打开视频链接".to_owned(),
+        bold: false,
+        italic: false,
+        color: None,
+        link: Some(url),
+    }
 }
 
 /// 图片地址白名单：`https` + `*.mihoyo.com`（官方正文图与静态资源同域，调研 §13.11）。

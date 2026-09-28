@@ -187,7 +187,7 @@ fn spawn(dir: &Path) -> (impl Write, impl BufRead, std::process::Child) {
 }
 
 #[test]
-fn serves_the_four_tools_over_stdio() {
+fn serves_the_six_tools_over_stdio() {
     let dir = temp_dir("stdio");
     store_catalog(&dir);
     store_pages(&dir);

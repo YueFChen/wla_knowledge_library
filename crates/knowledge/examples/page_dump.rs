@@ -27,6 +27,7 @@ fn main() {
                 PageElement::List { .. } => "list",
                 PageElement::Table { .. } => "table",
                 PageElement::Image { .. } => "image",
+                PageElement::VideoLink { .. } => "video_link",
                 PageElement::Divider => "divider",
             };
             *counts.entry(key).or_insert(0) += 1;

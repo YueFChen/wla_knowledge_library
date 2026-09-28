@@ -3,7 +3,7 @@
 //! 目录布局（与 catalog 缓存同一份，见 [`crate::cache`]）：
 //!
 //! ```text
-//! <app_data>/plugins/knowledge/<lang>/v1/
+//! <app_data>/plugin-data/knowledge_library/
 //!   bundle.json          catalog.json 原文（目录树：分区 / 标题 / path_id / updated_at）
 //!   pages/<path_id>.json 一篇的页面元素（**唯一的内容源**：检索与前端还原排版都用它）
 //!   mirror.json          镜像索引：每篇的镜像时刻、文档 updated_at 与规模
@@ -29,8 +29,8 @@ use serde::{Deserialize, Serialize};
 use crate::model::Doc;
 use crate::page::{PAGE_SCHEMA_VERSION, PageElement, elements_from_dom};
 use crate::render::{DEFAULT_WAIT_MS, detail_url, dump_dom};
-use wonderland_plugin_sdk::PluginFailure;
 use tracing::{info, warn};
+use wonderland_plugin_sdk::PluginFailure;
 
 /// 连续失败多少篇就认定是环境问题并中止（单篇失败照旧跳过）。
 const FAILURE_LIMIT: usize = 3;
@@ -42,7 +42,7 @@ pub const DEFAULT_MIRROR_CONCURRENCY: usize = 4;
 const MAX_MIRROR_CONCURRENCY: usize = 8;
 
 /// 镜像产物的结构版本；与 [`PAGE_SCHEMA_VERSION`] 一起参与校验。
-pub const MIRROR_SCHEMA_VERSION: u32 = 1;
+pub const MIRROR_SCHEMA_VERSION: u32 = 2;
 
 /// 一篇镜像后的页面。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -414,8 +414,8 @@ where
         let Some(joined) = tasks.join_next().await else {
             break;
         };
-        let (doc, outcome) =
-            joined.map_err(|error| PluginFailure::Other(format!("页面镜像任务异常结束：{error}")))?;
+        let (doc, outcome) = joined
+            .map_err(|error| PluginFailure::Other(format!("页面镜像任务异常结束：{error}")))?;
         done += 1;
         let mut report = MirrorProgress {
             path_id: doc.path_id.clone(),

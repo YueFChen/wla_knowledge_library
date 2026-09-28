@@ -20,9 +20,10 @@ async fn main() {
     let limit = args.next().and_then(|value| value.parse::<usize>().ok());
 
     let cache = KnowledgeCache::new(dir);
-    let bundle = cache.load().expect("读取 catalog 缓存").expect(
-        "没有 catalog 缓存；请先从桌面插件刷新知识库目录",
-    );
+    let bundle = cache
+        .load()
+        .expect("读取 catalog 缓存")
+        .expect("没有 catalog 缓存；请先从桌面插件刷新知识库目录");
     // 只从 catalog 取文档树：镜像作业要把**全部**目录节点列出来（含还没镜像的）。
     let kb = build_from_json(&bundle.catalog, &[]).expect("catalog 应可解析");
     let stats = kb.stats();

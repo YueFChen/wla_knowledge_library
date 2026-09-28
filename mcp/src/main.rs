@@ -13,12 +13,12 @@
 //!
 //! ```json
 //! { "mcpServers": { "wonderland-knowledge": {
-//!     "command": "C:\\path\\to\\mcp-knowledge.exe", "args": [] } } }
+//!     "command": "C:\\path\\to\\mcp-knowledge.exe", "args": ["--cache-dir", "C:\\path\\to\\plugin-data\\knowledge_library"] } } }
 //! ```
 //!
 //! 参数：
 //! - `--lang <zh-cn>`：知识库语种，默认 `zh-cn`；
-//! - `--cache-dir <DIR>`：指定缓存目录（默认 `<app_data>/plugins/knowledge/<lang>/v1`）；
+//! - `--cache-dir <DIR>`：指定缓存目录（默认 `<app_data>/plugin-data/knowledge_library`）；
 //! - `--expose <guide[,guide]>`：按配置只暴露选中的知识库（当前只有 `guide`）。
 //!
 //! 诊断输出一律走 stderr——stdout 只允许出现协议消息（ADR-010）。
@@ -54,7 +54,7 @@ fn run() -> Result<(), String> {
 
     let cache = match &options.cache_dir {
         Some(dir) => KnowledgeCache::new(dir.clone()),
-        None => KnowledgeCache::for_lang(&options.lang),
+        None => KnowledgeCache::for_plugin_data(),
     };
     eprintln!(
         "mcp-knowledge {}｜语种 {}｜缓存 {}｜只读（不抓取 / 不渲染 / 不修改知识内容）",
@@ -105,8 +105,11 @@ fn prepare(cache: &KnowledgeCache) -> Result<wonderland_knowledge::KnowledgeBase
     if pages.is_empty() {
         return Err(NO_MIRROR.to_owned());
     }
-    let kb = build_from_json(&bundle.catalog, &pages).map_err(|error| error.to_string())?;
-    // MCP 启动不触发模型执行；本地模型只能由桌面模型管理窗口显式加载。
+    let mut kb = build_from_json(&bundle.catalog, &pages).map_err(|error| error.to_string())?;
+    // MCP may reuse a compatible prebuilt vector cache, but must never build one at startup.
+    if let Err(error) = kb.enable_cached_local_embeddings(cache.dir()) {
+        eprintln!("本地向量索引无法加载，继续使用关键词检索：{error}");
+    }
     Ok(kb)
 }
 

@@ -14,7 +14,6 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::json;
 use tracing::{info, warn};
-use wonderland_plugin_sdk::PluginFailure;
 use wonderland_knowledge::cache::{Bundle, DEFAULT_MAX_AGE_DAYS, KnowledgeCache};
 use wonderland_knowledge::mirror::{MirrorOptions, MirrorStore, mirror_all, mirror_one};
 use wonderland_knowledge::render::DEFAULT_WAIT_MS;
@@ -22,6 +21,7 @@ use wonderland_knowledge::{
     DEFAULT_LANG, Doc, DocListGroup, DocText, HitKind, KnowledgeBase, KnowledgeStats, NO_MIRROR,
     NodeFilters, NodeLookup, SCHEMA_VERSION, SearchHit, Side, build_from_json,
 };
+use wonderland_plugin_sdk::PluginFailure;
 
 pub mod model;
 pub use model::*;
@@ -63,6 +63,8 @@ pub struct KnowledgeLibrary {
     /// 或刷新后发生一次。
     kb: Mutex<Option<Arc<KnowledgeBase>>>,
     embedding_error: Mutex<Option<String>>,
+    /// A manual disable is respected for the rest of this process; recheck or explicit activation clears it.
+    embeddings_disabled: AtomicBool,
     /// 镜像作业状态：同时只允许一个，取消靠标志位（渲染是阻塞的子进程，不强杀）。
     mirror: Mutex<MirrorJob>,
 }
@@ -86,6 +88,7 @@ impl KnowledgeLibrary {
             lang,
             kb: Mutex::new(None),
             embedding_error: Mutex::new(None),
+            embeddings_disabled: AtomicBool::new(false),
             mirror: Mutex::new(MirrorJob::default()),
         }
     }
@@ -97,6 +100,10 @@ impl KnowledgeLibrary {
 
     /// 列出当前预设与磁盘上发现的模型目录，并区分设置和实际加载状态。
     pub fn embedding_status(&self) -> Result<KnowledgeEmbeddingStatus, PluginFailure> {
+        if !self.embeddings_disabled.load(Ordering::Relaxed) {
+            // This may load an existing compatible vector cache, but never builds one.
+            let _ = self.base();
+        }
         let active = self
             .index()?
             .as_ref()
@@ -118,6 +125,7 @@ impl KnowledgeLibrary {
         match self.build_base(true) {
             Ok(kb) => {
                 *self.index()? = Some(kb);
+                self.embeddings_disabled.store(false, Ordering::Relaxed);
                 *self
                     .embedding_error
                     .lock()
@@ -136,6 +144,7 @@ impl KnowledgeLibrary {
 
     /// 明确停用并释放当前进程持有的嵌入模型。
     pub fn disable_embeddings(&self) -> Result<KnowledgeEmbeddingStatus, PluginFailure> {
+        self.embeddings_disabled.store(true, Ordering::Relaxed);
         *self.index()? = None;
         *self
             .embedding_error
@@ -146,6 +155,8 @@ impl KnowledgeLibrary {
 
     /// 复制或替换模型文件后重新读取清单；不会加载模型或构建向量索引。
     pub fn recheck_embeddings(&self) -> Result<KnowledgeEmbeddingStatus, PluginFailure> {
+        self.embeddings_disabled.store(false, Ordering::Relaxed);
+        *self.index()? = None;
         *self
             .embedding_error
             .lock()
@@ -175,7 +186,7 @@ impl KnowledgeLibrary {
             nodes_client: 0,
             table_blocks: 0,
             error: None,
-            mcp_config: mcp_config(binary.as_deref()),
+            mcp_config: mcp_config(binary.as_deref(), self.cache.dir()),
             mcp_binary: binary.map(|path| path.display().to_string()),
         };
 
@@ -314,7 +325,10 @@ impl KnowledgeLibrary {
     ///
     /// 目录只依赖 catalog，不应被“还没有正文镜像”阻塞；这样目录阶段完成后前端可以立即浏览
     /// 当前目录中的全部目标，并从任意条目触发单篇镜像。
-    pub fn list_docs(&self, keywords: Vec<String>) -> Result<Vec<KnowledgeDocGroup>, PluginFailure> {
+    pub fn list_docs(
+        &self,
+        keywords: Vec<String>,
+    ) -> Result<Vec<KnowledgeDocGroup>, PluginFailure> {
         let keywords: Vec<String> = keywords
             .into_iter()
             .map(|keyword| keyword.trim().to_owned())
@@ -361,7 +375,9 @@ impl KnowledgeLibrary {
             .iter()
             .find(|doc| doc.path_id == path_id)
             .map(|doc| doc.url.clone())
-            .ok_or_else(|| PluginFailure::Other(format!("知识库中没有 path_id 为 {path_id} 的文档")))
+            .ok_or_else(|| {
+                PluginFailure::Other(format!("知识库中没有 path_id 为 {path_id} 的文档"))
+            })
     }
 
     /// 镜像产物存放处（与 catalog 缓存同一目录下的 `pages/` 与 `mirror.json`）。
@@ -521,6 +537,23 @@ impl KnowledgeLibrary {
         let mut built = build_from_json(&bundle.catalog, &pages)?;
         if with_embeddings {
             built.enable_local_embeddings(self.cache.dir(), true)?;
+        } else if !self.embeddings_disabled.load(Ordering::Relaxed) {
+            match built.enable_cached_local_embeddings(self.cache.dir()) {
+                Ok(true) => {
+                    *self
+                        .embedding_error
+                        .lock()
+                        .map_err(|_| PluginFailure::NotInitialized)? = None;
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    warn!(reason = %error, "兼容向量索引无法加载，继续使用关键词检索");
+                    *self
+                        .embedding_error
+                        .lock()
+                        .map_err(|_| PluginFailure::NotInitialized)? = Some(error.to_string());
+                }
+            }
         }
         let kb = Arc::new(built);
         info!(
@@ -543,7 +576,9 @@ impl KnowledgeLibrary {
     }
 
     /// 索引缓存句柄。锁中毒只可能来自重建时的 panic，按内核既有做法回 `NotInitialized`。
-    fn index(&self) -> Result<std::sync::MutexGuard<'_, Option<Arc<KnowledgeBase>>>, PluginFailure> {
+    fn index(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Option<Arc<KnowledgeBase>>>, PluginFailure> {
         self.kb.lock().map_err(|_| PluginFailure::NotInitialized)
     }
 }
@@ -696,14 +731,14 @@ fn mcp_binary() -> Option<PathBuf> {
 /// 现成的 MCP 客户端配置片段（ADR-010：**只生成、不自动改写第三方配置**）。
 ///
 /// 找不到二进制时给模板并在根上附一条 `_note`，用户复制前能看见该改哪里。
-fn mcp_config(binary: Option<&Path>) -> String {
+fn mcp_config(binary: Option<&Path>, cache_dir: &Path) -> String {
     let found = binary.is_some();
     let command = binary
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| MCP_BINARY_PLACEHOLDER.to_owned());
     let mut root = json!({
         "mcpServers": {
-            "wonderland-knowledge": { "command": command, "args": [] }
+            "wonderland-knowledge": { "command": command, "args": ["--cache-dir", cache_dir.display().to_string()] }
         }
     });
     if !found {

@@ -146,7 +146,7 @@ fn library(tag: &str) -> KnowledgeLibrary {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&app_data_dir);
-    KnowledgeLibrary::new(app_data_dir.join("plugins/knowledge/zh-cn/v1"))
+    KnowledgeLibrary::new(app_data_dir.join("plugin-data/knowledge_library"))
 }
 
 /// 只预置 catalog（还没镜像）。
@@ -193,7 +193,7 @@ fn status_before_the_first_fetch_points_at_the_fetch_action() {
         status.error
     );
     assert!(
-        Path::new(&status.cache_dir).ends_with(Path::new("plugins/knowledge/zh-cn/v1")),
+        Path::new(&status.cache_dir).ends_with(Path::new("plugin-data/knowledge_library")),
         "缓存目录要与 MCP 二进制算出的同一份：{}",
         status.cache_dir
     );
@@ -452,15 +452,22 @@ fn mirror_status_counts_targets_without_needing_mirrors() {
 
 #[test]
 fn mcp_config_uses_the_binary_path_or_keeps_a_template() {
-    let found = mcp_config(Some(Path::new(r"C:\tools\mcp-knowledge.exe")));
+    let cache_dir = Path::new(
+        r"C:\Users\tester\AppData\Roaming\com.wonderland.assistant\plugin-data\knowledge_library",
+    );
+    let found = mcp_config(Some(Path::new(r"C:\tools\mcp-knowledge.exe")), cache_dir);
     let value: serde_json::Value = serde_json::from_str(&found).expect("片段应是合法 JSON");
     assert_eq!(
         value["mcpServers"]["wonderland-knowledge"]["command"],
         json!(r"C:\tools\mcp-knowledge.exe")
     );
+    assert_eq!(
+        value["mcpServers"]["wonderland-knowledge"]["args"],
+        json!(["--cache-dir", cache_dir.display().to_string()])
+    );
     assert!(value["_note"].is_null(), "找得到二进制就不附提示");
 
-    let missing = mcp_config(None);
+    let missing = mcp_config(None, cache_dir);
     let value: serde_json::Value = serde_json::from_str(&missing).expect("模板也应是合法 JSON");
     assert_eq!(
         value["mcpServers"]["wonderland-knowledge"]["command"],

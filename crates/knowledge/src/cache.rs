@@ -4,7 +4,7 @@
 //! `headingsMap.json` / `textMap.json` 已不再需要。目录是一份小 JSON，单文件原子替换就够。
 //!
 //! 跨进程约定（GUI 与 MCP 二进制共享同一份缓存，ADR-010）：
-//! - 目录：`<app_data>/plugins/knowledge/<lang>/v1`，与宿主 `AppContext.app_data_dir` 同源；
+//! - 目录：<app_data>/plugin-data/knowledge_library，由 Core 作为插件私有数据目录注入；
 //! - 写入：由知识库插件经 Core 网络能力取得目录后，先写同目录临时文件再 `rename` 覆盖；
 //! - 读取：整文件读完即关闭，遇到 `schema_version` 不匹配按"没有缓存"处理，避免拿旧结构跑新代码。
 
@@ -13,15 +13,14 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use wonderland_plugin_sdk::PluginFailure;
 use tracing::{info, warn};
+use wonderland_plugin_sdk::PluginFailure;
 
-use crate::{DEFAULT_LANG, SCHEMA_VERSION};
+use crate::SCHEMA_VERSION;
 
 /// 应用标识：与 `apps/desktop/src-tauri/tauri.conf.json` 的 `identifier` 一致。
 ///
-/// 主程序的数据目录由 Tauri 按它计算（`app.path().app_data_dir()`），MCP 二进制是独立进程，
-/// 只能自己拼同一路径——两处必须一致，改动 identifier 时两边都要改。
+/// MCP 独立于桌面 Core 运行，根据应用标识计算默认数据目录；桌面插件后端使用 Core 注入的私有数据路径。
 pub const APP_IDENTIFIER: &str = "com.wonderland.assistant";
 
 /// 默认缓存新鲜度：超过它就尝试刷新（内容近似月更，调研 §4.3）。
@@ -68,25 +67,16 @@ impl KnowledgeCache {
         Self { dir }
     }
 
-    /// 默认位置：`<app_data>/plugins/knowledge/<lang>/v1`。
+    /// Default location: app-data/plugin-data/knowledge_library.
     ///
-    /// 可用 `WONDERLAND_APP_DATA_DIR` 覆盖应用数据目录（开发与测试用）。
-    pub fn for_lang(lang: &str) -> Self {
-        Self::in_app_data(&app_data_dir(), lang)
+    /// WONDERLAND_APP_DATA_DIR can override the application data directory for development and tests.
+    pub fn for_plugin_data() -> Self {
+        Self::in_plugin_data(&app_data_dir())
     }
 
-    /// 指定应用数据目录下的默认位置：`<app_data_dir>/plugins/knowledge/<lang>/v1`。
-    ///
-    /// GUI 侧（插件）手里的是宿主的 `AppContext.app_data_dir`，用它构造才能与
-    /// MCP 二进制用 [`Self::for_lang`] 算出的目录**是同一份**（ADR-010 的跨进程约定）。
-    pub fn in_app_data(app_data_dir: &Path, lang: &str) -> Self {
-        Self::new(
-            app_data_dir
-                .join("plugins")
-                .join("knowledge")
-                .join(lang)
-                .join("v1"),
-        )
+    /// MCP locates plugin data here; the desktop backend uses the same path injected by Core.
+    pub fn in_plugin_data(app_data_dir: &Path) -> Self {
+        Self::new(app_data_dir.join("plugin-data").join("knowledge_library"))
     }
 
     pub fn dir(&self) -> &Path {
@@ -155,7 +145,6 @@ impl KnowledgeCache {
             last.map(|error| error.to_string()).unwrap_or_default()
         )))
     }
-
 }
 
 /// 应用数据目录（与宿主 `AppContext.app_data_dir` 同源）。
@@ -193,11 +182,6 @@ pub fn app_data_dir() -> PathBuf {
     std::env::temp_dir().join(APP_IDENTIFIER)
 }
 
-/// 默认语种（`lang` 参数缺省时使用）。
-pub fn default_lang() -> &'static str {
-    DEFAULT_LANG
-}
-
 fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -216,6 +200,16 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&dir);
         KnowledgeCache::new(dir)
+    }
+
+    #[test]
+    fn plugin_cache_uses_its_private_data_directory() {
+        let app_data = Path::new("D:/wonderland-data");
+        let cache = KnowledgeCache::in_plugin_data(app_data);
+        assert_eq!(
+            cache.dir(),
+            app_data.join("plugin-data").join("knowledge_library")
+        );
     }
 
     #[test]
@@ -252,5 +246,4 @@ mod tests {
         fs::write(&path, raw).unwrap();
         assert!(cache.load().unwrap().is_none(), "版本不匹配应按无缓存处理");
     }
-
 }

@@ -157,6 +157,19 @@ impl KnowledgeBase {
         Ok(())
     }
 
+    /// Enable local dense retrieval only when a compatible vector cache already exists.
+    /// This never runs document embedding or writes a cache.
+    pub fn enable_cached_local_embeddings(
+        &mut self,
+        cache_dir: &Path,
+    ) -> Result<bool, wonderland_plugin_sdk::PluginFailure> {
+        let Some(index) = LocalVectorIndex::load_cached(&self.blocks, cache_dir)? else {
+            return Ok(false);
+        };
+        self.vectors = Some(index);
+        Ok(true)
+    }
+
     /// Whether the in-memory index currently uses local dense retrieval.
     pub fn has_local_embeddings(&self) -> bool {
         self.vectors.is_some()

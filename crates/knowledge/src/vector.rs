@@ -10,8 +10,8 @@ use fastembed::{
 use serde::{Deserialize, Serialize};
 
 use crate::model::Block;
-use wonderland_plugin_sdk::PluginFailure;
 use tracing::{info, warn};
+use wonderland_plugin_sdk::PluginFailure;
 
 /// Stable model identity included in the vector-cache metadata.
 pub const LOCAL_EMBEDDING_MODEL_ID: &str = "BAAI/bge-small-zh-v1.5@qdrant-onnx-v1";
@@ -43,44 +43,47 @@ struct VectorCache {
 }
 
 impl LocalVectorIndex {
+    pub(crate) fn load_cached(
+        blocks: &[Block],
+        cache_dir: &Path,
+    ) -> Result<Option<Self>, PluginFailure> {
+        let model_paths = model_paths(cache_dir);
+        if model_paths.iter().any(|path| !path.is_file()) {
+            return Ok(None);
+        }
+        let Some(vectors) = cached_vectors(blocks, cache_dir) else {
+            return Ok(None);
+        };
+        let engine = load_engine(&model_paths)?;
+        info!(vectors = vectors.len(), "兼容的本地向量索引已载入");
+        Ok(Some(Self {
+            engine: Mutex::new(engine),
+            vectors,
+        }))
+    }
+
     pub(crate) fn load_or_build(
         blocks: &[Block],
         cache_dir: &Path,
         allow_build: bool,
     ) -> Result<Self, PluginFailure> {
-        let model_dir = cache_dir.join("models").join(LOCAL_EMBEDDING_MODEL_DIR);
-        let model_paths: Vec<PathBuf> = LOCAL_EMBEDDING_MODEL_FILES
-            .iter()
-            .map(|name| model_dir.join(name))
-            .collect();
+        let model_paths = model_paths(cache_dir);
         if model_paths.iter().any(|path| !path.is_file()) {
+            let model_dir = cache_dir.join("models").join(LOCAL_EMBEDDING_MODEL_DIR);
             return Err(PluginFailure::LocalData(format!(
                 "本地嵌入模型未安装；请将 BGE-small-zh-v1.5 ONNX 与 tokenizer 文件放入 {}",
                 model_dir.display()
             )));
         }
 
-        let corpus_fingerprint = fingerprint(blocks);
-        let index_path = cache_dir.join("vectors-bge-small-zh-v1.5.json");
-        if let Ok(bytes) = fs::read(&index_path) {
-            if let Ok(cache) = serde_json::from_slice::<VectorCache>(&bytes) {
-                if cache.schema == INDEX_SCHEMA
-                    && cache.model == LOCAL_EMBEDDING_MODEL_ID
-                    && cache.corpus_fingerprint == corpus_fingerprint
-                    && cache.vectors.len() == blocks.len()
-                    && cache
-                        .vectors
-                        .iter()
-                        .all(|vector| vector.len() == VECTOR_DIMENSIONS)
-                {
-                    let engine = load_engine(&model_paths)?;
-                    info!(vectors = cache.vectors.len(), "本地向量索引已载入");
-                    return Ok(Self {
-                        engine: Mutex::new(engine),
-                        vectors: cache.vectors,
-                    });
-                }
-            }
+        let index_path = index_path(cache_dir);
+        if let Some(vectors) = cached_vectors(blocks, cache_dir) {
+            let engine = load_engine(&model_paths)?;
+            info!(vectors = vectors.len(), "本地向量索引已载入");
+            return Ok(Self {
+                engine: Mutex::new(engine),
+                vectors,
+            });
         }
         if !allow_build {
             return Err(PluginFailure::LocalData(
@@ -90,6 +93,7 @@ impl LocalVectorIndex {
 
         let mut engine = load_engine(&model_paths)?;
         let texts: Vec<String> = blocks.iter().map(embed_text).collect();
+        let corpus_fingerprint = fingerprint(blocks);
         let vectors = engine
             .embed(&texts, Some(BATCH_SIZE))
             .map_err(|error| PluginFailure::LocalData(format!("本地文档向量化失败：{error}")))?;
@@ -123,6 +127,32 @@ impl LocalVectorIndex {
                 .collect(),
         )
     }
+}
+
+fn model_paths(cache_dir: &Path) -> Vec<PathBuf> {
+    let model_dir = cache_dir.join("models").join(LOCAL_EMBEDDING_MODEL_DIR);
+    LOCAL_EMBEDDING_MODEL_FILES
+        .iter()
+        .map(|name| model_dir.join(name))
+        .collect()
+}
+
+fn index_path(cache_dir: &Path) -> PathBuf {
+    cache_dir.join("vectors-bge-small-zh-v1.5.json")
+}
+
+fn cached_vectors(blocks: &[Block], cache_dir: &Path) -> Option<Vec<Vec<f32>>> {
+    let bytes = fs::read(index_path(cache_dir)).ok()?;
+    let cache = serde_json::from_slice::<VectorCache>(&bytes).ok()?;
+    (cache.schema == INDEX_SCHEMA
+        && cache.model == LOCAL_EMBEDDING_MODEL_ID
+        && cache.corpus_fingerprint == fingerprint(blocks)
+        && cache.vectors.len() == blocks.len()
+        && cache
+            .vectors
+            .iter()
+            .all(|vector| vector.len() == VECTOR_DIMENSIONS))
+    .then_some(cache.vectors)
 }
 
 fn load_engine(model_paths: &[PathBuf]) -> Result<TextEmbedding, PluginFailure> {

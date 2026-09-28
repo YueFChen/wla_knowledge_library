@@ -57,7 +57,11 @@ updated_at: string | null, url: string, text: string,
 /**
  * 命中来源：`candidate_node` / `candidate_doc` / `sparse`。
  */
-kind: string, table: Array<Array<string>>, };
+kind: string,
+/**
+ * 表格块的行列数据；用于可靠地呈现参数/API 字段。
+ */
+table: Array<Array<string>>, };
 export type KnowledgeNodeCandidate = { name: string, path_id: string, doc_title: string, breadcrumb: Array<string>, anchor: string,
 /**
  * 节点归属端（`server` / `client` / `both`；非节点块为空）。
@@ -115,7 +119,7 @@ indent: number, items: Array<Array<PageRun>>, } | { "type": "table",
 /**
  * 每列宽度（px，来自 `colgroup`；缺失为 0，前端自适应）。
  */
-columns: Array<number>, rows: Array<Array<PageCell>>, } | { "type": "image", src: string, width?: number | null, } | { "type": "divider" };
+columns: Array<number>, rows: Array<Array<PageCell>>, } | { "type": "image", src: string, width?: number | null, } | { "type": "video_link", url: string, } | { "type": "divider" };
 export type PageRun = { text: string, bold?: boolean, italic?: boolean,
 /**
  * 官方正文里的着色标注，原样保留（前端直接当 CSS 颜色用）。

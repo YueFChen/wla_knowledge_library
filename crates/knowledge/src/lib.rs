@@ -42,8 +42,8 @@ pub use vector::{
     LOCAL_EMBEDDING_MODEL_DIR, LOCAL_EMBEDDING_MODEL_FILES, LOCAL_EMBEDDING_MODEL_ID,
 };
 
-use wonderland_plugin_sdk::PluginFailure;
 use tracing::info;
+use wonderland_plugin_sdk::PluginFailure;
 
 /// 从 `catalog.json` 原文 + 一批页面镜像重建并建索引（示例、测试与缓存读取共用；不联网）。
 ///

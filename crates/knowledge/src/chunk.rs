@@ -150,8 +150,8 @@ fn build_page(doc: &Doc, page: &MirroredPage) -> (Vec<Block>, Vec<NodeEntry>, us
                 let text = table_text(&table);
                 push(&mut blocks, &mut chars, doc, &stack, text, table);
             }
-            // 图片只记地址、分隔线只是排版：都不构成检索块。
-            PageElement::Image { .. } | PageElement::Divider => {}
+            // 图片和视频只记地址，分隔线只是排版：都不构成检索块。
+            PageElement::Image { .. } | PageElement::VideoLink { .. } | PageElement::Divider => {}
         }
     }
 
