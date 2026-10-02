@@ -8,7 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-wonderland-plugin-sdk = { version = "0.1.0", path = "../../crates/plugin-sdk" }
+wonderland-plugin-sdk = { version = "0.1.8", path = "../../crates/plugin-sdk" }
 # 知识库索引、缓存和检索实现是本插件的内部组件，由 UI 后端与 MCP 入口共用。
 wonderland-knowledge = { path = "crates/knowledge" }
 serde.workspace = true
@@ -36,7 +36,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.98"
 license = "Apache-2.0"

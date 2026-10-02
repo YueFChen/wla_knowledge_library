@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './check-core-compatibility.mjs'
 
 import { createHash } from 'node:crypto'
 import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'

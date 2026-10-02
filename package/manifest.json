@@ -2,10 +2,10 @@
   "manifestVersion": 2,
   "id": "knowledge_library",
   "name": "千星奇域知识库",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "知识库检索、文档浏览、本地向量模型与外部 MCP。",
   "icon": "book-open-check",
-  "hostCompatibility": { "minCoreVersion": "0.1.0", "maxCoreVersionExclusive": "1.0.0", "protocol": { "minVersion": "1.0.0", "maxVersionExclusive": "2.0.0" } },
+  "hostCompatibility": { "minCoreVersion": "0.1.8", "maxCoreVersionExclusive": "1.0.0", "protocol": { "minVersion": "1.0.0", "maxVersionExclusive": "2.0.0" } },
   "platform": { "os": "windows", "architecture": "x86_64", "abi": "msvc" },
   "ui": {
     "entry": "ui/index.html",

@@ -50,3 +50,7 @@ CI 与 Release 工作流使用固定的 Core SDK 提交和 Windows x86_64 MSVC �
 - `ui/src/main.tsx`：UI Host SDK 适配；知识浏览界面及 MCP 配置面板在 `ui/src/`。
 
 更改协议时同步更新 `package/contract.json`、`ui/src/types.generated.ts` 与后端分发。插件包由 `scripts/build-plugin.mjs` 生成；debug 包不包含发布签名。
+
+## Core 0.1.8 与远程访问
+
+见 [CORE-COMPATIBILITY.md](CORE-COMPATIBILITY.md)，包括最低版本、远程声明和发布顺序。

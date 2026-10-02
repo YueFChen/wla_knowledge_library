@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: YueFChen/Wonderland_Assistant
-          ref: 8db29bd58817db973fc5030ba9e920a0c182e93b
+          ref: dc988400c4d66ec1c25a5221583efaf80c80db0b
           path: core
           persist-credentials: false
 

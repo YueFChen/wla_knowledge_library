@@ -33,7 +33,7 @@ fn run() -> Result<(), String> {
 
     serve(
         "knowledge_library",
-        "0.2.0",
+        env!("CARGO_PKG_VERSION"),
         CONTRACT,
         move |host, method, params, request_id| {
             dispatch(
