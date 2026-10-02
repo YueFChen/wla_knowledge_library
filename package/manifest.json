@@ -13,7 +13,7 @@
     "integrations": ["theme.followHost"],
     "contributions": [{ "id": "main", "kind": "activity", "title": "千星奇域知识库", "icon": "book-open-check", "defaultOrder": 600 }]
   },
-  "backend": { "entry": "backend/wonderland-knowledge-library.exe", "transport": "stdio-ndjson-v1" },
+  "backend": { "entry": "backend/wonderland-knowledge-library.exe", "transport": "stdio-ndjson-v1", "supportsServiceContext": true },
   "contract": "contract.json",
   "capabilities": ["network.public", "browser.open_official", "files.reveal_own"],
   "networkPublicHosts": ["act-webstatic.mihoyo.com"]
