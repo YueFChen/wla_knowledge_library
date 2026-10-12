@@ -137,22 +137,19 @@ fn dispatch(
         "docs" => value(library.list_docs(param(&params, "keywords")?)),
         "open_source" => {
             let path_id = string_param(&params, "path_id")?;
-            let _ = library.source_url(path_id)?;
+            let url = library.source_url(path_id)?;
             Ok(host
-                .call_core(
-                    "core.browser.open_official",
-                    json!({ "target": "document", "pathId": path_id }),
-                )
+                .call_core("core.browser.open", json!({ "url": url }))
                 .map_err(host_error)?)
         }
         "open_model_source" => {
-            let target = match string_param(&params, "source")? {
-                "onnx" => "onnx",
-                "model" => "model",
+            let url = match string_param(&params, "source")? {
+                "onnx" => "https://github.com/microsoft/onnxruntime/releases",
+                "model" => "https://huggingface.co/BAAI/bge-small-zh-v1.5",
                 _ => return Err(PluginFailure::InvalidInput.into()),
             };
             Ok(host
-                .call_core("core.browser.open_official", json!({ "target": target }))
+                .call_core("core.browser.open", json!({ "url": url }))
                 .map_err(host_error)?)
         }
         "reveal_cache_dir" => Ok(host

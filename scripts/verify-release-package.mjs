@@ -10,7 +10,7 @@ if (!packageRoot) throw new Error('Usage: node scripts/verify-release-package.mj
 const manifest = JSON.parse(await readFile(path.join(packageRoot, 'manifest.json'), 'utf8'))
 const checksums = JSON.parse(await readFile(path.join(packageRoot, 'checksums.json'), 'utf8'))
 if (
-  manifest.manifestVersion !== 2
+  manifest.manifestVersion !== 3
   || manifest.id !== 'knowledge_library'
   || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/.test(manifest.version ?? '')
   || manifest.platform?.os !== 'windows'
@@ -19,22 +19,6 @@ if (
   || manifest.backend?.entry !== 'backend/wonderland-knowledge-library.exe'
 ) {
   throw new Error('Release package contains invalid knowledge_library manifest metadata.')
-}
-if (
-  manifest.capabilities?.includes('network.public')
-  && (!Array.isArray(manifest.networkPublicHosts)
-    || manifest.networkPublicHosts.length === 0
-    || manifest.networkPublicHosts.length > 32
-    || new Set(manifest.networkPublicHosts).size !== manifest.networkPublicHosts.length
-    || manifest.networkPublicHosts.some((host) => (
-      typeof host !== 'string'
-      || host.length > 253
-      || host.split('.').some((label) => (
-        !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)
-      ))
-    )))
-) {
-  throw new Error('Release package must restrict network.public to explicit, valid hosts.')
 }
 if (checksums.algorithm !== 'sha256' || !Array.isArray(checksums.files) || checksums.files.length === 0) {
   throw new Error('Release package contains an invalid checksums.json.')

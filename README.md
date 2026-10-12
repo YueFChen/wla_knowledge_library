@@ -1,4 +1,4 @@
-> This is an independently versioned plugin repository. Local builds use the stable Core SDK from this checkout; see [Core repository boundaries](../../docs/REPOSITORY-BOUNDARIES.md).
+> This is an independently versioned plugin repository. Local builds use the stable Core SDK from this checkout; see [Core plugin repository layout](../README.md).
 
 # 千星奇域知识库插件
 
@@ -15,9 +15,9 @@
 
 ## Core 能力与环境
 
-插件申请 `network.public`、`browser.open_official` 和 `files.reveal_own`。Core 只允许 `network.public` 访问 `act-webstatic.mihoyo.com`；缓存、镜像和模型写入 Core 注入的 `WONDERLAND_PLUGIN_DATA_DIR`，打开目录时使用 `files.reveal_own` 的 `data` 范围。插件不读取账号凭据。
+manifest v3 不声明宿主服务授权。插件经 `core.network.public` 读取知识目录，通过 `core.browser.open {url}` 打开来源链接；缓存、镜像和模型写入 Core 注入的 `WONDERLAND_PLUGIN_DATA_DIR`，打开目录时使用 `core.files.reveal_own` 的 `data` 范围。插件不读取账号凭据。
 
-本地页面镜像需要系统 Edge；本地 embedding 需要下载所需模型文件。能力未授权、Edge 缺失或模型启动失败时，页面会显示可定位的错误。
+本地页面镜像需要系统 Edge；本地 embedding 需要下载所需模型文件。Edge 缺失或模型启动失败时，页面会显示可定位的错误。
 
 ## 构建和安装
 
@@ -41,7 +41,7 @@ CI 与 Release 工作流使用固定的 Core SDK 提交和 Windows x86_64 MSVC �
 
 ## 目录与契约
 
-- `package/manifest.json`：运行时身份、兼容范围、唯一 Activity、主题集成和能力声明。
+- `package/manifest.json`：manifest v3 运行时身份、兼容范围、唯一 Activity、主题集成和可选插件依赖。
 - `package/contract.json`：知识库方法、参数、超时与 `mirror.progress` 事件。
 - `src/main.rs`：桌面插件协议后端及 Core 服务适配。
 - `src/lib.rs`、`src/rag.rs`：桌面知识库入口和场景化检索规划；调用插件内部领域 crate。

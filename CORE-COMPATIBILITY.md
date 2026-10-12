@@ -1,4 +1,6 @@
-# Core 0.1.8 兼容说明
+# Core 兼容说明
+
+> 当前开发契约：源码已迁移到 manifest v3，仅适用于本次配套的 Core checkout。下列最低 Core 数值是本轮保留的清单／发布基线，不保证已发布的旧 Core 支持当前 v3 源码。正式发行前须统一 Core 与插件版本、hostCompatibility 和固定 SDK 提交；NDJSON 与 UI Bridge 版本保持不代表旧运行 API 兼容。
 
 本插件开发版本为 **0.2.1**，最低 Core 为 **0.1.8**。构建前运行 `node scripts/check-core-compatibility.mjs`；构建脚本会自动检查此条件。旧 Core 0.1.7 不识别本次 manifest 扩展，不能安装本次新包。
 

@@ -20,14 +20,11 @@ if (
   || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/.test(manifest.version ?? '')
   || !manifest.hostCompatibility
   || !manifest.platform
-  || !Array.isArray(manifest.capabilities)
+  || manifest.manifestVersion !== 3
 ) throw new Error('Plugin manifest is missing valid update metadata.')
 if (tag !== manifest.version && tag !== `v${manifest.version}`) throw new Error('Release tag must match the plugin manifest version.')
 if (manifest.platform.os !== 'windows' || manifest.platform.architecture !== 'x86_64' || manifest.platform.abi !== 'msvc') {
   throw new Error('The release manifest must target Windows x86_64 MSVC.')
-}
-if (manifest.capabilities.includes('network.public') && (!Array.isArray(manifest.networkPublicHosts) || manifest.networkPublicHosts.length === 0)) {
-  throw new Error('network.public requires explicit networkPublicHosts in manifest.json.')
 }
 
 const packageName = `${manifest.id}-${manifest.version}-windows-${manifest.platform.architecture}.wplug`
@@ -45,10 +42,7 @@ const payload = {
   hostCompatibility: manifest.hostCompatibility,
   uiBridgeCompatibility: manifest.ui?.bridgeCompatibility ?? null,
   platform: manifest.platform,
-  capabilities: manifest.capabilities,
-  networkPublicHosts: manifest.networkPublicHosts ?? [],
-  provides: manifest.provides ?? [],
-  requires: manifest.requires ?? [],
+  dependencies: manifest.dependencies ?? [],
 }
 const privateKeyDer = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed])
 const privateKey = createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' })

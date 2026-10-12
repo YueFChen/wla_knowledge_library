@@ -32,12 +32,6 @@ if (process.platform !== 'win32' || process.arch !== 'x64') {
 if (manifest.platform?.os !== 'windows' || manifest.platform?.architecture !== 'x86_64' || manifest.platform?.abi !== 'msvc') {
   throw new Error('manifest.json does not target Windows x86_64 MSVC.')
 }
-if (
-  manifest.capabilities.includes('network.public')
-  && (!Array.isArray(manifest.networkPublicHosts) || manifest.networkPublicHosts.length === 0)
-) {
-  throw new Error('network.public requires explicit networkPublicHosts in manifest.json.')
-}
 
 function run(command, args, cwd = root) {
   const commandName = process.platform === 'win32' && command === 'pnpm'
