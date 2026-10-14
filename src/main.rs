@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
-use base64::Engine as _;
 use serde_json::{Value, json};
 use wonderland_knowledge::{DEFAULT_LANG, KNOWLEDGE_BASE_URL};
 use wonderland_knowledge_library::{KnowledgeLibrary, MirrorProgress};
-use wonderland_plugin_sdk::{HostClient, PluginError, PluginFailure, RequestTracker, serve};
+use wonderland_plugin_sdk::{
+    HostClient, HttpRequestParams, PluginError, PluginFailure, RequestTracker, serve,
+};
 
 const CONTRACT: &str = include_str!("../package/contract.json");
 
@@ -108,21 +109,12 @@ fn dispatch(
         "recheck_embeddings" => value(library.recheck_embeddings()),
         "refresh" => {
             let url = format!("{KNOWLEDGE_BASE_URL}/{DEFAULT_LANG}/catalog.json");
-            let response = host
-                .call_core(
-                    "core.network.public",
-                    json!({
-                        "method": "GET", "url": url, "headers": [], "query": [], "body": null,
-                    }),
-                )
-                .map_err(host_error)?;
-            let encoded = response
-                .get("contentBase64")
-                .and_then(Value::as_str)
-                .ok_or(PluginFailure::InvalidResponse)?;
-            let bytes = base64::engine::general_purpose::STANDARD
-                .decode(encoded)
-                .map_err(|_| PluginFailure::InvalidResponse)?;
+            let mut request = HttpRequestParams::get(url);
+            request.redirects.follow = true;
+            let (response, bytes) = host.http_request_bytes(&request).map_err(host_error)?;
+            if !(200..300).contains(&response.status) {
+                return Err(PluginFailure::Http(response.status).into());
+            }
             let catalog = String::from_utf8(bytes).map_err(|_| PluginFailure::InvalidResponse)?;
             value(library.refresh(catalog))
         }

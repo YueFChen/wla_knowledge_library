@@ -1,8 +1,8 @@
 # Core 兼容说明
 
-> 当前开发契约：源码已迁移到 manifest v3，仅适用于本次配套的 Core checkout。下列最低 Core 数值是本轮保留的清单／发布基线，不保证已发布的旧 Core 支持当前 v3 源码。正式发行前须统一 Core 与插件版本、hostCompatibility 和固定 SDK 提交；NDJSON 与 UI Bridge 版本保持不代表旧运行 API 兼容。
+> 当前开发契约：本轮保留 manifest v3、NDJSON 1.0 和现有 UI Bridge 版本，配套 Core 提供统一 HTTP、分块字节流及可选期限。候选包仅用于本地验收；正式发行前仍需固定已验证 SDK 提交并通过签名、联调与渠道切换门槛。
 
-本插件开发版本为 **0.2.1**，最低 Core 为 **0.1.8**。构建前运行 `node scripts/check-core-compatibility.mjs`；构建脚本会自动检查此条件。旧 Core 0.1.7 不识别本次 manifest 扩展，不能安装本次新包。
+本插件开发版本为 **0.2.2**，要求配套 Core **>=0.2.0, <0.3.0**。构建前运行 `node scripts/check-core-compatibility.mjs`；构建脚本会自动检查此条件。本轮保留 pluginId 与业务数据目录，旧 Core 不保证提供新的宿主接口。
 
 远程访问：**未声明，仅限本地**。
 
@@ -10,4 +10,4 @@
 
 `backend.supportsServiceContext: true` 表示后端会原样回传每次调用的上下文。SDK 插件使用每次 dispatch 收到的 `HostClient`；不要缓存一个客户端跨不同请求处理文件操作。未声明远程支持的插件不会出现在共享列表，Core 也会拒绝直接远程调用。
 
-本次是本地开发适配，版本号不代表已经发布。发布顺序为先推送并发布配套 Core，再按插件仓库的检查、签名和发布流程发布插件。已登记插件的普通升级不需要修改 Catalog 身份记录。
+本次是本地候选适配，版本号不代表已经发布。正式 Core 与插件按配套发行门槛验证，签名和云端激活另行执行；插件分发统一使用新的 Cloudflare 服务。
