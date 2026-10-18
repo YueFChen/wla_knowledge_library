@@ -1,95 +1,83 @@
-name: Plugin release
-
+name: Build signed plugin package
 on:
-  push:
-    tags:
-      - 'v*'
-
+  workflow_dispatch:
+    inputs:
+      core_commit:
+        description: Verified Core commit containing the shared package tools (40 hex).
+        required: true
+        type: string
+      source_commit:
+        description: Plugin source commit to build (40 hex).
+        required: true
+        type: string
 permissions:
   contents: read
-
-concurrency:
-  group: knowledge-library-release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  build:
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-
-  release:
-    name: Sign update manifest and publish release
-    needs: build
+  package:
     runs-on: windows-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout plugin release source
-        uses: actions/checkout@v7
+      - name: Require a private repository and explicit source commits
+        shell: pwsh
+        env:
+          CORE_COMMIT: ${{ inputs.core_commit }}
+          PLUGIN_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          $event = Get-Content -Raw $env:GITHUB_EVENT_PATH | ConvertFrom-Json
+          if ($event.repository.private -ne $true) { throw 'Signed package builds require a private repository.' }
+          if ($env:CORE_COMMIT -cnotmatch '^[a-f0-9]{40}$' -or $env:PLUGIN_COMMIT -cnotmatch '^[a-f0-9]{40}$') { throw 'Supply exact verified commits.' }
+          git config --global core.autocrlf false
+      - uses: actions/checkout@v4
         with:
+          repository: ${{ vars.WONDERLAND_CORE_REPOSITORY || 'YueFChen/Wonderland_Assistant' }}
+          ref: ${{ inputs.core_commit }}
+          path: core
+          token: ${{ secrets.WONDERLAND_CORE_CHECKOUT_TOKEN || github.token }}
           persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          path: core/plugins/knowledge_library
+          persist-credentials: false
+      - uses: actions/setup-node@v4
         with:
           node-version: 24.21.0
-
-      - name: Download verified package
-        uses: actions/download-artifact@v4
+      - uses: pnpm/action-setup@v4
         with:
-          name: knowledge-library-package
-          path: release-artifact
-
-      - name: Verify release tag and signing key availability
-        shell: pwsh
+          version: 11.27.0
+      - run: pnpm install --frozen-lockfile
+        working-directory: core
+      - run: pnpm install --frozen-lockfile
+        working-directory: core/plugins/knowledge_library
+      - run: pnpm run typecheck
+        working-directory: core/plugins/knowledge_library
+      - run: cargo test --locked
+        working-directory: core/plugins/knowledge_library
+      - name: Build the complete signed package with the original identity
+        run: pnpm run package:release
+        working-directory: core/plugins/knowledge_library
         env:
           PLUGIN_UPDATE_SIGNING_KEY: ${{ secrets.PLUGIN_UPDATE_SIGNING_KEY }}
           PLUGIN_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_UPDATE_SIGNING_PUBLIC_KEY }}
-        run: |
-          $manifest = Get-Content -Raw 'package/manifest.json' | ConvertFrom-Json
-          if ($env:GITHUB_REF_NAME -ne "v$($manifest.version)") {
-            throw 'Tag and plugin manifest version differ.'
-          }
-          if ([string]::IsNullOrWhiteSpace($env:PLUGIN_UPDATE_SIGNING_KEY)) {
-            throw 'PLUGIN_UPDATE_SIGNING_KEY secret is missing.'
-          }
-          if ($env:PLUGIN_UPDATE_SIGNING_PUBLIC_KEY -notmatch '^[a-f0-9]{64}$') {
-            throw 'PLUGIN_UPDATE_SIGNING_PUBLIC_KEY repository variable is missing or invalid.'
-          }
-
-      - name: Create signed update manifest
+      - name: Verify the artifact and record its source commits
         shell: pwsh
         env:
-          PLUGIN_UPDATE_SIGNING_KEY: ${{ secrets.PLUGIN_UPDATE_SIGNING_KEY }}
+          CORE_COMMIT: ${{ inputs.core_commit }}
+          PLUGIN_COMMIT: ${{ inputs.source_commit }}
           PLUGIN_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_UPDATE_SIGNING_PUBLIC_KEY }}
         run: |
-          $manifest = Get-Content -Raw 'package/manifest.json' | ConvertFrom-Json
-          $packageName = "$($manifest.id)-$($manifest.version)-windows-$($manifest.platform.architecture).wplug"
-          $packagePath = Join-Path 'release-artifact' $packageName
-          if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
-            throw "Verified package artifact missing: $packagePath"
-          }
-          New-Item -ItemType Directory -Path 'release-output' | Out-Null
-          node scripts/create-update-manifest.mjs `
-            package/manifest.json `
-            $packagePath `
-            $env:GITHUB_REPOSITORY `
-            $env:GITHUB_REF_NAME `
-            release-output/knowledge_library-update.json
-
-      - name: Publish GitHub Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $manifest = Get-Content -Raw 'package/manifest.json' | ConvertFrom-Json
-          $packageName = "$($manifest.id)-$($manifest.version)-windows-$($manifest.platform.architecture).wplug"
-          gh release create `
-            $env:GITHUB_REF_NAME `
-            (Join-Path 'release-artifact' $packageName) `
-            release-output/knowledge_library-update.json `
-            --repo $env:GITHUB_REPOSITORY `
-            --title "$($manifest.name) v$($manifest.version)" `
-            --generate-notes `
-            --verify-tag
+          $manifest = Get-Content -Raw 'core/plugins/knowledge_library/package/manifest.json' | ConvertFrom-Json
+          $file = "core/plugins/knowledge_library/target/$($manifest.id)-$($manifest.version)-windows-$($manifest.platform.architecture).wplug"
+          $result = node core/packages/plugin-tools/verify.mjs $file --signed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $receipt = $result | ConvertFrom-Json
+          $receipt | Add-Member -NotePropertyName coreCommit -NotePropertyValue $env:CORE_COMMIT
+          $receipt | Add-Member -NotePropertyName sourceCommit -NotePropertyValue $env:PLUGIN_COMMIT
+          $receipt | ConvertTo-Json -Depth 50 | Set-Content -Encoding utf8 'core/plugins/knowledge_library/target/package-receipt.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-knowledge_library-${{ github.run_id }}
+          path: |
+            core/plugins/knowledge_library/target/*.wplug
+            core/plugins/knowledge_library/target/package-receipt.json
+          if-no-files-found: error
+          retention-days: 14

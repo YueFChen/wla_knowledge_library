@@ -42,5 +42,6 @@
     "transport": "stdio-ndjson-v1",
     "supportsServiceContext": true
   },
-  "contract": "contract.json"
+  "contract": "contract.json",
+  "author": "YueFChen"
 }

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { Drawer } from '@wonderland/ui'
 import type { KnowledgeStatus } from './types.generated'
-import { Plug, X } from 'lucide-react'
 
 import { copyText } from './clipboard'
 import { t } from './i18n'
@@ -12,15 +12,7 @@ interface Props {
   onClose: () => void
 }
 
-/**
- * MCP 接入：从右侧滑出的抽屉，里面是现成的客户端配置片段 + 一键复制 + 二进制检测。
- *
- * 做成抽屉而不是页面里的一块面板：接入配置是「偶尔看一眼、抄完就走」的东西，
- * 常驻会把正文挤矮，内联展开又会把三栏顶下去。抽屉盖在页面上，页面结构不动。
- *
- * ADR-010 定的是「只生成片段、不自动改写第三方配置」，所以这里没有"一键写入"，
- * 只有复制；能不能用由 `mcp_binary` 决定，界面直说。
- */
+/** Shared configuration dialog; copying never edits a third-party client's files. */
 export function McpPanel({ status, onClose }: Props) {
   const [client, setClient] = useState<McpClient>('generic')
   const [copied, setCopied] = useState(false)
@@ -30,14 +22,6 @@ export function McpPanel({ status, onClose }: Props) {
 
   const key = (suffix: string) => `mcp.${client}.${suffix}` as MessageKey
 
-  // Esc 关闭：抽屉盖住了整页，键盘用户不该只能去点遮罩。
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   const copy = async () => {
     setError('')
@@ -60,25 +44,8 @@ export function McpPanel({ status, onClose }: Props) {
   }
 
   return (
-    <div className="ka-drawer-layer">
-      <button className="ka-drawer-scrim" aria-label={t('common.close')} onClick={onClose} />
-
-      <aside className="ka-drawer" role="dialog" aria-modal="true" aria-label={t('mcp.title')}>
-        <header className="ka-drawer-head">
-          <h2>
-            <Plug aria-hidden />
-            {t('mcp.title')}
-          </h2>
-          <div className="ka-actions">
-            <button className="ka-ghost" onClick={onClose}>
-              <X aria-hidden />
-              {t('common.close')}
-            </button>
-          </div>
-        </header>
-
-        <div className="ka-drawer-body">
-          <p className="ka-hint">{t('mcp.description')}</p>
+    <Drawer open title={t('mcp.title')} onClose={onClose} closeLabel={t('common.close')} size="lg">
+        <div className="ka-mcp-content">
 
           <div className="ka-client-tabs" role="tablist" aria-label={t('mcp.clientSelect')}>
             {MCP_CLIENTS.map((item) => (
@@ -99,15 +66,13 @@ export function McpPanel({ status, onClose }: Props) {
             ))}
           </div>
 
-          <section className="ka-guide" aria-labelledby="ka-guide-title">
-            <h3 id="ka-guide-title">{t(key('title'))}</h3>
-            <p className="ka-hint">{t(key('summary'))}</p>
+          <details className="ka-guide"><summary>{t(key('title'))}</summary>
             <ol className="ka-guide-steps">
               <li>{t(key('step1'))}</li>
               <li>{t(key('step2'))}</li>
               <li>{t(key('step3'))}</li>
             </ol>
-          </section>
+          </details>
 
           <div className="ka-code-head">
             <strong>{t('mcp.configTitle')}</strong>
@@ -116,11 +81,7 @@ export function McpPanel({ status, onClose }: Props) {
             </button>
           </div>
           <pre className="ka-code">{config}</pre>
-          <p className="ka-meta">
-            {status.mcp_binary
-              ? t('mcp.binaryPath', { path: status.mcp_binary })
-              : t('mcp.binaryMissing', { name: 'mcp-knowledge.exe' })}
-          </p>
+          {!status.mcp_binary && <p className="ka-error" role="alert">{t('mcp.binaryMissing', { name: 'mcp-knowledge.exe' })}</p>}
 
           <section className="ka-guide ka-guide--test">
             <div className="ka-code-head">
@@ -129,18 +90,16 @@ export function McpPanel({ status, onClose }: Props) {
                 {promptCopied ? t('mcp.promptCopied') : t('mcp.copyPrompt')}
               </button>
             </div>
-            <p className="ka-hint">{t('mcp.verifyDescription')}</p>
+
             <blockquote className="ka-prompt">{t('mcp.testPrompt')}</blockquote>
           </section>
 
-          <p className="ka-hint">{t('mcp.readOnly')}</p>
           {error && (
             <div className="ka-error" role="alert">
               {error}
             </div>
           )}
         </div>
-      </aside>
-    </div>
+    </Drawer>
   )
 }

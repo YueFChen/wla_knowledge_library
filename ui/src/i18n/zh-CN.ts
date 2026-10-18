@@ -30,7 +30,7 @@ export const zh = {
   'search.searching': '正在匹配…',
   'search.needQuery': '请先输入问题。',
   'search.empty': '没有命中：知识库里可能确实没有这份资料，换个说法再试。',
-  'search.placeholder': '搜索节点、Lua API、UI、运动器方案或直接描述问题…',
+  'search.placeholder': '搜索文档…',
   'search.matchHint': '自动综合精确匹配、关键词近似匹配；本地模型可用时补充语义检索。',
 
   // 命中与块共用的字段
@@ -43,7 +43,7 @@ export const zh = {
   'hit.both': '双端',
 
   // 右侧内容区
-  'doc.placeholder': '从左侧目录选一篇，或在上面的搜索栏提问。',
+  'doc.placeholder': '选择文档',
   'doc.back': '返回',
   'doc.notMirrored': '本篇还没有镜像：镜像后按官方排版显示（一篇十余秒）。',
 
@@ -52,7 +52,7 @@ export const zh = {
   'embedding.summary': '存在与当前文档和模型匹配的本地向量索引时会自动启用语义召回；没有匹配索引时不会自动构建。手动启用可建立或重建索引。',
   'embedding.currentTitle': '本机模型',
   'embedding.loading': '正在检查模型目录与运行状态…',
-  'embedding.manualOnly': '模型不会自动运行',
+  'embedding.manualOnly': '未启用',
   'embedding.active': '当前应用进程已加载模型，正在参与检索。',
   'embedding.inactive': '没有可用的匹配索引，检索使用关键词召回。需要时可在此手动建立向量索引。',
   'embedding.loadAndBuild': '手动加载并建立索引',
@@ -72,9 +72,9 @@ export const zh = {
   'embedding.recommendedText': '中文检索模型，体量适中，适合作为起步选择。当前版本提供 BGE 的 ONNX 预设；其他模型也可满足上面的通用要求，但需先接入其运行时、tokenizer、向量维度与缓存标识。',
   'embedding.onnxSource': '打开 ONNX 模型仓库',
   'embedding.modelSource': '打开 BAAI 模型说明',
-  'embedding.presetDetails': '查看当前 BGE 预设的安装目录与文件清单',
+  'embedding.presetDetails': '安装模型',
   'embedding.presetNote': '把模型文件放入以下目录；如没有匹配的向量索引，可在模型管理窗口手动启用并建立索引。',
-  'embedding.fallback': '模型或向量索引不可用时，会使用关键词检索；本地向量索引保存在缓存目录。',
+  'embedding.fallback': '未启用时使用关键词检索。',
 
   // 页面还原
   'page.toc': '文章大纲',

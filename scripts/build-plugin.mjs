@@ -1,3 +1,4 @@
+import {finishPackage} from '../../../packages/plugin-tools/pack.mjs'
 import './check-core-compatibility.mjs'
 import { cp, mkdir, rm } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
@@ -33,4 +34,5 @@ await cp(path.join(packageRoot, 'contract.json'), path.join(output, 'contract.js
 await cp(path.join(root, 'ui', 'dist'), path.join(output, 'ui'), { recursive: true })
 await cp(path.join(targetRoot, 'debug', 'wonderland-knowledge-library.exe'), path.join(output, 'backend', 'wonderland-knowledge-library.exe'))
 await cp(path.join(targetRoot, 'debug', 'mcp-knowledge.exe'), path.join(output, 'backend', 'mcp-knowledge.exe'))
+await finishPackage({root,stage:output})
 console.log('Debug plugin package created.')

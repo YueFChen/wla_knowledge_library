@@ -12,6 +12,7 @@
     "build:release": "node scripts/build-release.mjs",
     "check": "pnpm run typecheck && pnpm run test && pnpm --dir ui run build",
     "test": "pnpm --dir ui run test",
-    "typecheck": "pnpm --dir ui run typecheck"
+    "typecheck": "pnpm --dir ui run typecheck",
+    "package:release": "node scripts/build-release.mjs --signed"
   }
 }

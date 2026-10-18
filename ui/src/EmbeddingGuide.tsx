@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { BrainCircuit, ExternalLink, FolderOpen, RefreshCw, X } from 'lucide-react'
+import { ExternalLink, FolderOpen, RefreshCw } from 'lucide-react'
+import { Drawer } from '@wonderland/ui'
 import type { KnowledgeEmbeddingStatus } from './types.generated'
 
 import type { KnowledgeApi } from './api'
@@ -30,13 +31,6 @@ export function EmbeddingGuide({ api, cacheDir, onOpenCache, onClose }: Props) {
     return () => { live = false }
   }, [api])
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
 
   const openSource = async (source: 'onnx' | 'model') => {
     setError('')
@@ -60,22 +54,8 @@ export function EmbeddingGuide({ api, cacheDir, onOpenCache, onClose }: Props) {
   }
 
   return (
-    <div className="ka-drawer-layer ka-embedding-layer">
-      <button className="ka-drawer-scrim" aria-label={t('common.close')} onClick={onClose} />
-      <aside className="ka-drawer" role="dialog" aria-modal="true" aria-labelledby="ka-embedding-title">
-        <header className="ka-drawer-head">
-          <h2 id="ka-embedding-title">
-            <BrainCircuit aria-hidden />
-            {t('embedding.title')}
-          </h2>
-          <button className="ka-ghost" onClick={onClose}>
-            <X aria-hidden />
-            {t('common.close')}
-          </button>
-        </header>
-
-        <div className="ka-drawer-body ka-embedding-body">
-          <p className="ka-hint">{t('embedding.summary')}</p>
+    <Drawer open title={t('embedding.title')} onClose={onClose} closeLabel={t('common.close')} size="lg" dismissible={!busy}>
+        <div className="ka-embedding-body" aria-busy={busy}>
 
           <section className="ka-guide ka-embedding-status" aria-labelledby="ka-embedding-current">
             <div className="ka-embedding-status-head">
@@ -89,7 +69,6 @@ export function EmbeddingGuide({ api, cacheDir, onOpenCache, onClose }: Props) {
                 <div className="ka-embedding-switch">
                   <div>
                     <strong>{status.active ? t('embedding.loaded') : t('embedding.manualOnly')}</strong>
-                    <p className="ka-meta">{status.active ? t('embedding.active') : t('embedding.inactive')}</p>
                   </div>
                   <button
                     className={status.active ? 'ka-ghost' : 'ka-primary'}
@@ -124,36 +103,17 @@ export function EmbeddingGuide({ api, cacheDir, onOpenCache, onClose }: Props) {
                     )
                   })}
                 </div>
-                <p className="ka-meta">{t('embedding.manualNotice')}</p>
+
               </>
             ) : <p className="ka-meta">{t('embedding.loading')}</p>}
           </section>
 
-          <section className="ka-guide" aria-labelledby="ka-embedding-needs">
-            <h3 id="ka-embedding-needs">{t('embedding.requiredTitle')}</h3>
-            <ul className="ka-embedding-list">
-              <li>{t('embedding.requiredLocal')}</li>
-              <li>{t('embedding.requiredChinese')}</li>
-              <li>{t('embedding.requiredCompatible')}</li>
-            </ul>
-          </section>
-
-          <section className="ka-guide ka-embedding-recommend" aria-labelledby="ka-embedding-recommendation">
-            <h3 id="ka-embedding-recommendation">{t('embedding.recommendedTitle')}</h3>
-            <p className="ka-hint">{t('embedding.recommendedText')}</p>
-            <div className="ka-embedding-links">
-              <button className="ka-ghost" onClick={() => void openSource('onnx')}>
-                {t('embedding.onnxSource')} <ExternalLink aria-hidden />
-              </button>
-              <button className="ka-ghost" onClick={() => void openSource('model')}>
-                {t('embedding.modelSource')} <ExternalLink aria-hidden />
-              </button>
-            </div>
-          </section>
-
           <details className="ka-embedding-details">
             <summary>{t('embedding.presetDetails')}</summary>
-            <p className="ka-meta">{t('embedding.presetNote')}</p>
+            <div className="ka-embedding-links">
+              <button className="ka-ghost" onClick={() => void openSource('onnx')}>{t('embedding.onnxSource')} <ExternalLink aria-hidden /></button>
+              <button className="ka-ghost" onClick={() => void openSource('model')}>{t('embedding.modelSource')} <ExternalLink aria-hidden /></button>
+            </div>
             <code className="ka-embedding-path">{modelDir}</code>
             <ul className="ka-embedding-files">
               <li>model_optimized.onnx</li>
@@ -164,14 +124,13 @@ export function EmbeddingGuide({ api, cacheDir, onOpenCache, onClose }: Props) {
             </ul>
           </details>
 
-          <p className="ka-meta">{t('embedding.fallback')}</p>
+          {!status?.active && <p className="ka-meta">{t('embedding.fallback')}</p>}
           <button className="ka-primary ka-embedding-cache" onClick={onOpenCache}>
             <FolderOpen aria-hidden />
             {t('toolbar.openCacheDir')}
           </button>
           {error && <div className="ka-error" role="alert">{error}</div>}
         </div>
-      </aside>
-    </div>
+    </Drawer>
   )
 }

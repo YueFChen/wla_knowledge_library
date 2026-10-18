@@ -9,7 +9,7 @@ import type {
 import { BrainCircuit, FolderOpen, HardDriveDownload, Plug, RefreshCw, Square } from 'lucide-react'
 
 import type { KnowledgeApi } from './api'
-import { errorMessage, formatBytes, formatTime, wholeDays } from './display'
+import { errorMessage, formatBytes, formatTime } from './display'
 import { t } from './i18n'
 
 interface Props {
@@ -81,7 +81,6 @@ export function Toolbar({
     void api.mirrorCancel().catch(() => undefined)
   }
 
-  const days = wholeDays(status.age_days)
   const hasCatalog = status.cached_at !== null
   const jobRunning = running || (mirror?.running ?? false)
   // 本页发起的任务只看实时事件，避免启动瞬间回退到上一次作业的 `last`（会先闪出旧进度）。
@@ -102,7 +101,6 @@ export function Toolbar({
               </span>
               <span className="ka-meta">
                 {t('toolbar.updated', { time: formatTime(status.cached_at) })}
-                {days !== null && ` · ${t('toolbar.age', { days })}`}
                 {status.stale && ` · ${t('toolbar.stale')}`}
                 {mirror !== null && mirror.outdated > 0 && ` · ${t('mirror.outdated', { count: mirror.outdated })}`}
               </span>

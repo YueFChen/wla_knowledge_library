@@ -343,6 +343,7 @@ export function KnowledgeLibraryPage({ api }: Props) {
                   <div className="ka-search">
                     <input
                       className="ka-input"
+                      aria-label={t('search.placeholder')}
                       type="search"
                       value={query}
                       placeholder={t('search.placeholder')}
@@ -358,7 +359,6 @@ export function KnowledgeLibraryPage({ api }: Props) {
                       {searching ? t('search.searching') : t('search.submit')}
                     </button>
                   </div>
-                  <p className="ka-meta ka-search-hint">{t('search.matchHint')}</p>
                 </>
               )}
 

@@ -22,11 +22,16 @@ jobs:
         shell: pwsh
         working-directory: core/plugins/knowledge_library
     steps:
+      - name: Require the verified Core SDK commit
+        shell: pwsh
+        env:
+          CORE_COMMIT: ${{ vars.WONDERLAND_CORE_COMMIT }}
+        run: if ($env:CORE_COMMIT -cnotmatch '^[a-f0-9]{40}$') { throw 'Configure WONDERLAND_CORE_COMMIT to the verified package-signing Core commit.' }
       - name: Checkout pinned Core SDK
         uses: actions/checkout@v7
         with:
           repository: YueFChen/Wonderland_Assistant
-          ref: 9e401ad2d24b16568d786fc4b2e32311fee60b37
+          ref: ${{ vars.WONDERLAND_CORE_COMMIT }}
           path: core
           persist-credentials: false
 

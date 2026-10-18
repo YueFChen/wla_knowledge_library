@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { finishPackage } from '../../../packages/plugin-tools/pack.mjs'
 import './check-core-compatibility.mjs'
 
 import { createHash } from 'node:crypto'
@@ -76,27 +77,8 @@ if (backendEntry !== 'backend/wonderland-knowledge-library.exe') {
 await cp(path.join(targetRoot, 'release', `${cargoPackageName}.exe`), path.join(staging, ...backendEntry.split('/')))
 await cp(path.join(targetRoot, 'release', 'mcp-knowledge.exe'), path.join(staging, 'backend', 'mcp-knowledge.exe'))
 
-const files = await collectFiles(staging)
-const checksums = {
-  algorithm: 'sha256',
-  files: await Promise.all(files.map(async (relativePath) => ({
-    path: relativePath,
-    sha256: createHash('sha256').update(await readFile(path.join(staging, ...relativePath.split('/')))).digest('hex'),
-  }))),
-}
-await writeFile(path.join(staging, 'checksums.json'), `${JSON.stringify(checksums, null, 2)}\n`, 'utf8')
-
-const archivePath = path.join(
-  targetRoot,
-  `${manifest.id}-${manifest.version}-windows-${manifest.platform.architecture}.wplug`,
-)
-await rm(archivePath, { force: true })
-run('powershell.exe', [
-  '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-  '-File', path.join(root, 'scripts/create-wplug.ps1'),
-  '-SourceDirectory', staging,
-  '-DestinationPath', archivePath,
-])
+const archivePath = path.join(targetRoot,`${manifest.id}-${manifest.version}-windows-${manifest.platform.architecture}.wplug`)
+await finishPackage({root,stage:staging,archivePath})
 
 const archiveBytes = await readFile(archivePath)
 if (archiveBytes.length < 1 || archiveBytes.length > 100 * 1024 * 1024) {

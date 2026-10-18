@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
-    "test": "node --experimental-strip-types --test src/*.test.ts"
+    "test": "node --test src/*.test.ts"
   },
   "dependencies": {
     "@wonderland/plugin-ui-sdk": "link:../../../packages/plugin-ui-sdk",
