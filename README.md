@@ -58,3 +58,5 @@ CI 与 Release 工作流使用固定的 Core SDK 提交和 Windows x86_64 MSVC �
 ## Core 兼容与远程访问
 
 见 [CORE-COMPATIBILITY.md](CORE-COMPATIBILITY.md)，包括最低版本、远程声明和发布顺序。
+
+插件使用 on_demand 启动策略：启用表示可用，首次打开页面或调用方法时才启动后端；后台实例在本次 Core 运行期间保留，不随标签关闭立即退出。普通 RPC 由 Core 跟踪，不额外持久化恢复标记或改变业务数据。

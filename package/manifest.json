@@ -40,7 +40,8 @@
   "backend": {
     "entry": "backend/wonderland-knowledge-library.exe",
     "transport": "stdio-ndjson-v1",
-    "supportsServiceContext": true
+    "supportsServiceContext": true,
+    "activation": "on_demand"
   },
   "contract": "contract.json",
   "author": "YueFChen"
