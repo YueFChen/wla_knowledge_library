@@ -24,6 +24,7 @@ jobs:
     steps:
       - name: Require the verified Core SDK commit
         shell: pwsh
+        working-directory: ${{ github.workspace }}
         env:
           CORE_COMMIT: ${{ vars.WONDERLAND_CORE_COMMIT }}
         run: if ($env:CORE_COMMIT -cnotmatch '^[a-f0-9]{40}$') { throw 'Configure WONDERLAND_CORE_COMMIT to the verified package-signing Core commit.' }
