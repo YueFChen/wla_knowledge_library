@@ -1,316 +1,134 @@
-//! 端到端：真的拉起 `mcp-knowledge`，真的按 MCP 协议问一遍。
-//!
-//! 全程**离线**：先用自造夹具预置 catalog 与页面镜像，再让二进制只读本地缓存
-//! （不联网、不渲染、不写盘）。夹具同样是自造的——官方正文不得进入仓库（调研 §9）。
-
-use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-
 use serde_json::{Value, json};
-use wonderland_knowledge::cache::{Bundle, KnowledgeCache};
-use wonderland_knowledge::mirror::{MirrorStore, PageMeta};
-use wonderland_knowledge::page::{PageCell, PageElement, PageRun};
-use wonderland_knowledge::{MirroredPage, PAGE_SCHEMA_VERSION};
-
-const CATALOG: &str = r#"[
-  { "title": "节点介绍", "path_id": "d_nodes", "children": [
-      { "title": "服务器节点", "path_id": "d_server", "children": [
-          { "title": "执行节点", "path_id": "d_exec", "children": [] }
-      ]},
-      { "title": "客户端节点", "path_id": "d_client", "children": [
-          { "title": "运算节点", "path_id": "d_calc", "children": [] }
-      ]}
-  ]},
-  { "title": "概念介绍", "path_id": "d_concept", "children": [
-      { "title": "单位状态", "path_id": "d_unit", "children": [] }
-  ]}
-]"#;
-
-fn run(text: &str) -> PageRun {
-    PageRun {
-        text: text.to_owned(),
-        bold: false,
-        italic: false,
-        color: None,
-        link: None,
+use std::{
+    fs,
+    io::{BufRead, BufReader, Write},
+    path::PathBuf,
+    process::{Command, Stdio},
+    sync::atomic::AtomicBool,
+};
+use wonderland_knowledge::workspace::{Fetcher, Resource, Source, Workspace, unique};
+struct Offline;
+impl Fetcher for Offline {
+    fn get(&self, _: &str) -> Result<Resource, String> {
+        Err("offline".into())
+    }
+    fn render(&self, _: &str, _: &AtomicBool) -> Result<String, String> {
+        Err("offline".into())
     }
 }
-
-fn heading(level: u8, text: &str, anchor: &str) -> PageElement {
-    PageElement::Heading {
-        level,
-        text: text.to_owned(),
-        anchor: anchor.to_owned(),
+struct Temp(PathBuf);
+impl Drop for Temp {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
     }
 }
-
-fn para(text: &str) -> PageElement {
-    PageElement::Paragraph {
-        runs: vec![run(text)],
-    }
-}
-
-fn table(rows: &[&[&str]]) -> PageElement {
-    PageElement::Table {
-        columns: Vec::new(),
-        rows: rows
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|cell| PageCell {
-                        runs: vec![run(cell)],
-                        images: Vec::new(),
-                        colspan: 1,
-                        rowspan: 1,
-                        header: false,
-                    })
-                    .collect()
-            })
-            .collect(),
-    }
-}
-
-fn page(path_id: &str, elements: Vec<PageElement>) -> MirroredPage {
-    MirroredPage {
-        schema_version: PAGE_SCHEMA_VERSION,
-        path_id: path_id.to_owned(),
-        title: String::new(),
-        url: String::new(),
-        updated_at: None,
-        mirrored_at: 0,
-        elements,
-    }
-}
-
-fn pages() -> Vec<MirroredPage> {
-    vec![
-        page(
-            "d_exec",
-            vec![
-                heading(1, "一、通用", "a_gen"),
-                heading(2, "建立字典", "a_build"),
-                para("按配置ID建立字典并写入目标变量，可指定字典类型与默认值"),
-                para("节点参数"),
-                table(&[
-                    &["参数名", "类型", "说明"],
-                    &["字典ID", "字符串", "要建立的字典"],
-                ]),
-            ],
-        ),
-        page(
-            "d_calc",
-            vec![
-                heading(1, "二、字典", "a_calc"),
-                heading(2, "字典加速", "a_speed"),
-                para("字典加速把字典按键排序以加速查询"),
-                para("字典加速在批量查询时收益明显"),
-                para("字典加速需要额外内存"),
-            ],
-        ),
-        page(
-            "d_unit",
-            vec![
-                heading(1, "一、单位状态", "a_unit"),
-                para("单位状态表示实体当前所处的状态，可叠加多个效果"),
-            ],
-        ),
-    ]
-}
-
-fn temp_dir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "wonderland-mcp-knowledge-{tag}-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
-}
-
-/// 预置 catalog 缓存。
-fn store_catalog(dir: &Path) {
-    KnowledgeCache::new(dir.to_path_buf())
-        .store(&Bundle::new("zh-cn", CATALOG.into()))
-        .expect("预置 catalog");
-}
-
-/// 预置页面镜像。
-fn store_pages(dir: &Path) {
-    let store = MirrorStore::new(dir.to_path_buf());
-    let mut index = store.load_index();
-    for page in pages() {
-        store.save_page(&page).expect("写页面镜像");
-        index.pages.insert(
-            page.path_id.clone(),
-            PageMeta {
-                mirrored_at: page.mirrored_at,
-                updated_at: page.updated_at.clone(),
-                elements: page.elements.len(),
-                tables: page.tables(),
-                images: page.images(),
+#[test]
+fn live_stdio_observes_updates_and_revocation_without_writing_or_restarting() {
+    let root = Temp(std::env::temp_dir().join(format!("wla-mcp-test-{}", unique())));
+    fs::create_dir_all(&root.0).unwrap();
+    let file = root.0.join("notes.txt");
+    fs::write(&file, "Knowledge source initial content.").unwrap();
+    let workspace = Workspace::new(root.0.join("data"));
+    let library = workspace.create("Local Notes", "blank").unwrap();
+    workspace
+        .save_source(
+            &library.id,
+            Source {
+                id: String::new(),
+                name: "Local".into(),
+                kind: "files".into(),
+                paths: vec![file.to_string_lossy().into()],
+                url: String::new(),
+                path_prefix: String::new(),
+                depth: 0,
+                max_pages: 1,
+                dynamic: false,
             },
-        );
-    }
-    store.save_index(&index).expect("写镜像索引");
-}
-
-/// 拉起二进制、发一条 initialize，返回（stdin, stdout, 子进程）。
-fn spawn(dir: &Path) -> (impl Write, impl BufRead, std::process::Child) {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_mcp-knowledge"))
-        .arg("--cache-dir")
-        .arg(dir)
+        )
+        .unwrap();
+    workspace.build(&library.id, &Offline, false).unwrap();
+    let document = workspace
+        .snapshot(&workspace.library(&library.id, false).unwrap())
+        .unwrap()
+        .documents[0]
+        .id
+        .clone();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_wla_knowledge_mcp"))
+        .args(["--cache-dir", workspace.root().to_str().unwrap()])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null()) // stdout 才是协议通道；stderr 只作诊断
+        .stderr(Stdio::null())
         .spawn()
-        .expect("启动二进制");
-
-    let mut stdin = child.stdin.take().expect("stdin");
-    let mut stdout = BufReader::new(child.stdout.take().expect("stdout"));
-    let init = ask(
-        &mut stdin,
-        &mut stdout,
-        json!({
-            "jsonrpc": "2.0", "id": 1, "method": "initialize",
-            "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "probe", "version": "1" } }
-        }),
-    );
-    assert_eq!(init["result"]["protocolVersion"], json!("2025-06-18"));
-    assert!(init["result"]["capabilities"]["tools"].is_object());
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let mut output = BufReader::new(child.stdout.take().unwrap());
+    let mut id = 0;
+    let mut call = |method: &str, params: Value| {
+        id += 1;
+        writeln!(
+            input,
+            "{}",
+            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})
+        )
+        .unwrap();
+        input.flush().unwrap();
+        let mut line = String::new();
+        output.read_line(&mut line).unwrap();
+        let response: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(response["id"], id);
+        response["result"].clone()
+    };
+    let initialized = call("initialize", json!({}));
+    assert_eq!(initialized["serverInfo"]["name"], "wla_knowledge_library");
+    let tools = call("tools/list", json!({}));
+    assert_eq!(tools["tools"].as_array().unwrap().len(), 7);
     assert!(
-        init["result"]["instructions"]
-            .as_str()
-            .is_some_and(|value| value.contains("千星奇域"))
-    );
-    (stdin, stdout, child)
-}
-
-#[test]
-fn serves_the_six_tools_over_stdio() {
-    let dir = temp_dir("stdio");
-    store_catalog(&dir);
-    store_pages(&dir);
-
-    let (mut stdin, mut stdout, mut child) = spawn(&dir);
-
-    // 通知不该产生回复：下一个响应的 id 必须是 2（若服务端回了通知，这里会读到 id 缺失的那条）
-    writeln!(
-        stdin,
-        r#"{{"jsonrpc":"2.0","method":"notifications/initialized"}}"#
-    )
-    .expect("写通知");
-    stdin.flush().expect("flush");
-
-    let listed = ask(
-        &mut stdin,
-        &mut stdout,
-        json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
-    );
-    assert_eq!(listed["id"], json!(2), "通知不应产生回复");
-    let tools = listed["result"]["tools"].as_array().expect("tools 数组");
-    assert_eq!(tools.len(), 6);
-    assert!(
-        tools
+        tools["tools"]
+            .as_array()
+            .unwrap()
             .iter()
-            .all(|tool| tool["annotations"]["readOnlyHint"] == json!(true))
+            .all(|tool| tool["annotations"]["readOnlyHint"] == true)
     );
-
-    let node = ask(
-        &mut stdin,
-        &mut stdout,
-        json!({
-            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-            "params": { "name": "get_node", "arguments": { "names": ["建立字典"] } }
-        }),
+    let hidden = call(
+        "tools/call",
+        json!({"name":"list_libraries","arguments":{}}),
     );
-    let text = node["result"]["content"][0]["text"]
-        .as_str()
-        .expect("文本内容");
-    assert!(text.contains("a_build"), "应命中执行节点里的锚点：{text}");
-    assert!(text.contains("server"), "应带出归属端：{text}");
-    assert!(text.contains("字典ID"), "参数表要随节点带出来：{text}");
+    assert_eq!(hidden["structuredContent"]["results"], json!([]));
+    workspace
+        .update(&library.id, None, Some(true), None)
+        .unwrap();
+    let visible = call(
+        "tools/call",
+        json!({"name":"read_doc","arguments":{"key":document}}),
+    );
+    assert_eq!(visible["isError"], false);
+    assert!(visible.to_string().contains("initial content"));
+    fs::write(&file, "Replacement content after a successful update.").unwrap();
+    workspace.build(&library.id, &Offline, false).unwrap();
+    let updated = call(
+        "tools/call",
+        json!({"name":"read_doc","arguments":{"key":document}}),
+    );
+    assert!(updated.to_string().contains("Replacement content"));
+    assert!(!updated.to_string().contains("initial content"));
+    workspace
+        .update(&library.id, None, Some(false), None)
+        .unwrap();
+    let registry_before = fs::read(workspace.root().join("registry.json")).unwrap();
+    let denied = call(
+        "tools/call",
+        json!({"name":"read_doc","arguments":{"library_ids":[library.id],"key":document}}),
+    );
+    assert_eq!(denied["isError"], true);
+    let listed = call(
+        "tools/call",
+        json!({"name":"list_libraries","arguments":{}}),
+    );
+    assert_eq!(listed["structuredContent"]["results"], json!([]));
     assert_eq!(
-        node["result"]["structuredContent"]["results"][0]["query"],
-        json!("建立字典"),
-        "声明 outputSchema 时应返回同形的 structuredContent"
+        fs::read(workspace.root().join("registry.json")).unwrap(),
+        registry_before
     );
-
-    let search = ask(
-        &mut stdin,
-        &mut stdout,
-        json!({
-            "jsonrpc": "2.0", "id": 4, "method": "tools/call",
-            "params": { "name": "search", "arguments": { "queries": ["字典加速有什么用"], "top_k": 3 } }
-        }),
-    );
-    let hits = search["result"]["content"][0]["text"]
-        .as_str()
-        .expect("文本内容");
-    assert!(
-        hits.contains("运算节点"),
-        "别名表应把该文档带进候选：{hits}"
-    );
-
-    let failed = ask(
-        &mut stdin,
-        &mut stdout,
-        json!({
-            "jsonrpc": "2.0", "id": 5, "method": "tools/call",
-            "params": { "name": "read_doc", "arguments": { "key": "不存在的文档" } }
-        }),
-    );
-    assert_eq!(
-        failed["result"]["isError"],
-        json!(true),
-        "工具错误要留在结果里"
-    );
-
-    drop(stdin); // 关闭 stdin → 服务端退出
-    let status = child.wait().expect("等待退出");
-    assert!(status.success(), "关闭 stdin 后应正常退出：{status}");
-
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn missing_mirror_is_reported_as_a_tool_error() {
-    let dir = temp_dir("no-mirror");
-    store_catalog(&dir); // 只有目录，没镜像
-
-    let (mut stdin, mut stdout, mut child) = spawn(&dir);
-
-    let called = ask(
-        &mut stdin,
-        &mut stdout,
-        json!({
-            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-            "params": { "name": "search", "arguments": { "queries": ["字典"] } }
-        }),
-    );
-    assert_eq!(
-        called["result"]["isError"],
-        json!(true),
-        "缺镜像时工具调用要回 isError"
-    );
-    let text = called["result"]["content"][0]["text"]
-        .as_str()
-        .expect("文本内容");
-    assert!(text.contains("镜像"), "原因要可读：{text}");
-
-    drop(stdin);
-    let status = child.wait().expect("等待退出");
-    assert!(status.success(), "缺镜像不该让进程崩掉：{status}");
-
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
-/// 发一条请求、读回一条响应（换行分隔的 JSON-RPC）。
-fn ask(stdin: &mut impl Write, stdout: &mut impl BufRead, request: Value) -> Value {
-    writeln!(stdin, "{request}").expect("写请求");
-    stdin.flush().expect("flush");
-    let mut line = String::new();
-    let read = stdout.read_line(&mut line).expect("读响应");
-    assert!(read > 0, "服务端提前退出");
-    serde_json::from_str(&line).expect("响应应是单行 JSON")
+    drop(input);
+    assert!(child.wait().unwrap().success());
 }

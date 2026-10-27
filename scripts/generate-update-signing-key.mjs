@@ -8,7 +8,7 @@ import path from 'node:path'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const secretDirectory = path.join(root, '.secrets')
 const privateKeyPath = path.join(secretDirectory, 'PLUGIN_UPDATE_SIGNING_KEY')
-const publicKeyPath = path.join(secretDirectory, 'knowledge_library-signing-public-key.txt')
+const publicKeyPath = path.join(secretDirectory, 'wla_knowledge_library-signing-public-key.txt')
 if (existsSync(privateKeyPath) || existsSync(publicKeyPath)) {
   throw new Error('Signing key files already exist. Refusing to replace an existing key.')
 }

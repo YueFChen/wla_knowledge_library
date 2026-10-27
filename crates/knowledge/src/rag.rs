@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use wonderland_knowledge::{Doc, KnowledgeBase, SearchFilters, SearchHit, Side};
+use crate::{Doc, KnowledgeBase, SearchFilters, SearchHit, Side};
 
 const MIN_POOL: usize = 16;
 const MAX_POOL: usize = 60;
@@ -254,7 +254,7 @@ fn hit_key(hit: &SearchHit) -> HitKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wonderland_knowledge::HitKind;
+    use crate::HitKind;
 
     fn doc(id: usize, section: &str) -> Doc {
         Doc {

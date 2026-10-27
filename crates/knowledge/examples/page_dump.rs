@@ -22,6 +22,7 @@ fn main() {
         let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
         for element in &elements {
             let key = match element {
+                PageElement::Code { .. } => "code",
                 PageElement::Heading { .. } => "heading",
                 PageElement::Paragraph { .. } => "paragraph",
                 PageElement::List { .. } => "list",

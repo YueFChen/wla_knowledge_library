@@ -1,13 +1,13 @@
 # Core 兼容说明
 
-> 当前开发契约：本轮保留 manifest v3、NDJSON 1.0 和现有 UI Bridge 版本，配套 Core 提供统一 HTTP、分块字节流及可选期限。候选包仅用于本地验收；正式发行前仍需固定已验证 SDK 提交并通过签名、联调与渠道切换门槛。
+知识库开发版本 **0.3.0** 要求 Core **>=0.2.1, <0.3.0**，仅支持 Windows x86_64 MSVC。本地目录、运行 ID 和 GitHub 仓库统一为 `wla_knowledge_library`。
 
-本插件开发版本为 **0.2.2**，要求配套 Core **>=0.2.0, <0.3.0**。构建前运行 `node scripts/check-core-compatibility.mjs`；构建脚本会自动检查此条件。本轮保留 pluginId 与业务数据目录，旧 Core 不保证提供新的宿主接口。
+保持 manifest v3、NDJSON 1.0、UI Bridge 1.x。使用每次调用传入的 `HostClient` 保留 Core 服务上下文与取消关系。用到统一 HTTP／字节流、插件密钥、浏览器打开、文件导出、通用文件／目录选择和代理信息接口。动态网页复用本机 Edge，语义推理由用户自备本机 Ollama／OpenAI 兼容嵌入服务承担。
 
-远程访问：**未声明，仅限本地**。
+Core 0.2.1 已发布，包含 `core.files.pick_paths` 和 `core.network.proxy_info`。普通 CI 的 `WONDERLAND_CORE_COMMIT` 固定为验证过的 Core 完整提交；本轮基线为 `0cdace0573e555d394ce9dcdf72edf44da0ff9ee`。
 
-本轮升级 SDK 和构建基线，保留本机模型、数据目录与 MCP 服务的本地使用方式。尚未完成这些功能的远程交互设计，因此不声明远程支持。
+`backend.supportsServiceContext: true`；不缓存宿主客户端跨请求执行文件操作。插件未声明远程访问，Core 不对远程会话提供此插件。
 
-`backend.supportsServiceContext: true` 表示后端会原样回传每次调用的上下文。SDK 插件使用每次 dispatch 收到的 `HostClient`；不要缓存一个客户端跨不同请求处理文件操作。未声明远程支持的插件不会出现在共享列表，Core 也会拒绝直接远程调用。
+独立 MCP 与 GUI 共用领域代码，读取显式暴露的库。GUI 模型请求经 Core HTTP 与密钥头注入；独立 MCP 使用 loopback HTTP，在相同 Windows 用户下只读解密本插件标准密钥分区，不要求 Core 持续运行。
 
-本次是本地候选适配，版本号不代表已经发布。正式 Core 与插件按配套发行门槛验证，签名和云端激活另行执行；插件分发统一使用新的 Cloudflare 服务。
+本地开发包允许未签名。本轮交付本地验收包和源码；正式签名与 Cloudflare 发布另行确认，不将版本号视为已在线发行。

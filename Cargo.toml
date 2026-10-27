@@ -1,6 +1,6 @@
 [package]
-name = "wonderland-knowledge-library"
-description = "千星奇域知识库插件：桌面入口、知识检索与场景化 RAG 规划。"
+name = "wla_knowledge_library"
+description = "知识库插件：独立多库、资料快照、本机嵌入检索与只读 MCP。"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -36,7 +36,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.98"
 license = "Apache-2.0"

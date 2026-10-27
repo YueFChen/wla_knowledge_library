@@ -17,7 +17,7 @@ const cargoPackageName = cargoToml.match(/^name\s*=\s*"([a-z0-9_-]+)"/m)?.[1]
 const workspaceVersion = cargoToml.match(/^\[workspace\.package\][\s\S]*?^version\s*=\s*"([^"]+)"/m)?.[1]
 
 if (!cargoPackageName) throw new Error('Cannot read the package name from Cargo.toml.')
-if (manifest.id !== 'knowledge_library') throw new Error('manifest.json has an unexpected plugin ID.')
+if (manifest.id !== 'wla_knowledge_library') throw new Error('manifest.json has an unexpected plugin ID.')
 if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/.test(manifest.version ?? '')) {
   throw new Error('manifest.json has an invalid plugin version.')
 }
@@ -55,11 +55,11 @@ run('pnpm', ['--dir', 'ui', 'run', 'build'])
 run('cargo', [
   'build', '--locked', '--release',
   '--package', cargoPackageName, '--bin', cargoPackageName,
-  '--package', 'wonderland-mcp-knowledge', '--bin', 'mcp-knowledge',
+  '--package', 'wla_knowledge_mcp', '--bin', 'wla_knowledge_mcp',
 ])
 
 const targetRoot = path.resolve(root, 'target')
-const staging = path.resolve(targetRoot, 'knowledge_library-release-package')
+const staging = path.resolve(targetRoot, 'wla_knowledge_library-release-package')
 const relativeStaging = path.relative(targetRoot, staging)
 if (!relativeStaging || relativeStaging.startsWith('..') || path.isAbsolute(relativeStaging)) {
   throw new Error('Refusing to replace a release package outside this repository target directory.')
@@ -71,11 +71,11 @@ await cp(path.join(root, 'package/contract.json'), path.join(staging, 'contract.
 await cp(path.join(root, 'ui/dist'), path.join(staging, 'ui'), { recursive: true })
 
 const backendEntry = manifest.backend?.entry
-if (backendEntry !== 'backend/wonderland-knowledge-library.exe') {
+if (backendEntry !== 'backend/wla_knowledge_library.exe') {
   throw new Error('Unexpected plugin backend entry in manifest.json.')
 }
 await cp(path.join(targetRoot, 'release', `${cargoPackageName}.exe`), path.join(staging, ...backendEntry.split('/')))
-await cp(path.join(targetRoot, 'release', 'mcp-knowledge.exe'), path.join(staging, 'backend', 'mcp-knowledge.exe'))
+await cp(path.join(targetRoot, 'release', 'wla_knowledge_mcp.exe'), path.join(staging, 'backend', 'wla_knowledge_mcp.exe'))
 
 const archivePath = path.join(targetRoot,`${manifest.id}-${manifest.version}-windows-${manifest.platform.architecture}.wplug`)
 await finishPackage({root,stage:staging,archivePath})

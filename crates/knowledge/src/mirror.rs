@@ -3,7 +3,7 @@
 //! 目录布局（与 catalog 缓存同一份，见 [`crate::cache`]）：
 //!
 //! ```text
-//! <app_data>/plugin-data/knowledge_library/
+//! <app_data>/plugin-data/wla_knowledge_library/
 //!   bundle.json          catalog.json 原文（目录树：分区 / 标题 / path_id / updated_at）
 //!   pages/<path_id>.json 一篇的页面元素（**唯一的内容源**：检索与前端还原排版都用它）
 //!   mirror.json          镜像索引：每篇的镜像时刻、文档 updated_at 与规模

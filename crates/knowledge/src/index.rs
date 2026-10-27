@@ -15,8 +15,6 @@ use crate::model::{
     NodeCandidate, NodeEntry, NodeFilters, NodeLookup, SCHEMA_VERSION, SearchFilters, SearchHit,
     Side,
 };
-use crate::vector::LocalVectorIndex;
-use std::path::Path;
 
 /// BM25 参数（与 spike 一致）。
 const K1: f32 = 1.2;
@@ -53,8 +51,6 @@ pub struct KnowledgeBase {
     chars: usize,
     /// 已镜像、真正有块的篇目：`read_doc` 只对它们生效。
     indexed: HashSet<String>,
-    /// Optional local dense retrieval; BM25 remains available when model assets are absent.
-    vectors: Option<LocalVectorIndex>,
 }
 
 impl KnowledgeBase {
@@ -71,16 +67,22 @@ impl KnowledgeBase {
         // 块 → 自身标题 + 祖先标题（按面包屑前缀判定）
         let doc_by_path: HashMap<&str, &Doc> =
             docs.iter().map(|d| (d.path_id.as_str(), d)).collect();
+        let mut titles_by_breadcrumb: HashMap<Vec<String>, Vec<String>> = HashMap::new();
+        for doc in &docs {
+            titles_by_breadcrumb
+                .entry(doc.breadcrumb.clone())
+                .or_default()
+                .push(doc.title.clone());
+        }
         let titles_of_block: Vec<Vec<String>> = blocks
             .iter()
             .map(|b| {
                 let mut titles = vec![b.doc_title.clone()];
                 if let Some(doc) = doc_by_path.get(b.path_id.as_str()) {
-                    for other in &docs {
-                        if other.breadcrumb.len() < doc.breadcrumb.len()
-                            && doc.breadcrumb.starts_with(&other.breadcrumb)
+                    for length in 1..doc.breadcrumb.len() {
+                        if let Some(ancestors) = titles_by_breadcrumb.get(&doc.breadcrumb[..length])
                         {
-                            titles.push(other.title.clone());
+                            titles.extend(ancestors.iter().cloned());
                         }
                     }
                 }
@@ -138,45 +140,14 @@ impl KnowledgeBase {
             alias,
             chars,
             indexed,
-            vectors: None,
         }
-    }
-
-    /// Enable local dense retrieval from installed model assets and persist the corpus vectors.
-    /// Returns an error when the model is missing or invalid; callers may keep sparse retrieval.
-    pub fn enable_local_embeddings(
-        &mut self,
-        cache_dir: &Path,
-        allow_build: bool,
-    ) -> Result<(), wonderland_plugin_sdk::PluginFailure> {
-        self.vectors = Some(LocalVectorIndex::load_or_build(
-            &self.blocks,
-            cache_dir,
-            allow_build,
-        )?);
-        Ok(())
-    }
-
-    /// Enable local dense retrieval only when a compatible vector cache already exists.
-    /// This never runs document embedding or writes a cache.
-    pub fn enable_cached_local_embeddings(
-        &mut self,
-        cache_dir: &Path,
-    ) -> Result<bool, wonderland_plugin_sdk::PluginFailure> {
-        let Some(index) = LocalVectorIndex::load_cached(&self.blocks, cache_dir)? else {
-            return Ok(false);
-        };
-        self.vectors = Some(index);
-        Ok(true)
-    }
-
-    /// Whether the in-memory index currently uses local dense retrieval.
-    pub fn has_local_embeddings(&self) -> bool {
-        self.vectors.is_some()
     }
 
     pub fn docs(&self) -> &[Doc] {
         &self.docs
+    }
+    pub fn blocks(&self) -> &[Block] {
+        &self.blocks
     }
 
     /// 已有正文块、实际参加检索的文档；供上层按当前可检索语料估计内容分布。
@@ -395,10 +366,6 @@ impl KnowledgeBase {
         filters: &SearchFilters,
     ) -> Vec<SearchHit> {
         let bm = self.bm25(query);
-        let semantic = self
-            .vectors
-            .as_ref()
-            .and_then(|index| index.similarity_scores(query));
         let (mut candidates, node_blocks) = self.converge(query);
         let side = side_hint(query);
         let alias = self.alias_scores(query);
@@ -451,16 +418,6 @@ impl KnowledgeBase {
                     None => {}
                 }
             }
-            if let Some(scores) = &semantic {
-                // BGE returns cosine-compatible vectors. Bound the dense contribution to the same
-                // ranking scale as the existing lexical and metadata boosts.
-                value += scores
-                    .get(idx as usize)
-                    .copied()
-                    .unwrap_or(0.0)
-                    .clamp(-1.0, 1.0)
-                    * 4.0;
-            }
             value + ALIAS_WEIGHT * alias.by_block[idx as usize]
         };
         let by_score = |a: &u32, b: &u32| {
@@ -474,13 +431,12 @@ impl KnowledgeBase {
         // 因此这里按块去重（候选集合本身就是块序号，天然唯一），不再按锚点合并。
         let mut out: Vec<SearchHit> = Vec::with_capacity(top_k);
         candidates.retain(|idx| matches_filter(&self.blocks[*idx as usize]));
+        candidates.retain(|idx| score(*idx) > 0.0);
         candidates.sort_by(by_score);
         for idx in &candidates {
             let block = &self.blocks[*idx as usize];
             let kind = if node_blocks.contains(idx) {
                 HitKind::CandidateNode
-            } else if bm.get(idx).copied().unwrap_or(0.0) == 0.0 && semantic.is_some() {
-                HitKind::Vector
             } else {
                 HitKind::CandidateDoc
             };
@@ -493,16 +449,14 @@ impl KnowledgeBase {
             let in_candidates: HashSet<u32> = candidates.iter().copied().collect();
             let mut rest: Vec<u32> = (0..self.blocks.len() as u32)
                 .filter(|idx| {
-                    !in_candidates.contains(idx) && matches_filter(&self.blocks[*idx as usize])
+                    !in_candidates.contains(idx)
+                        && matches_filter(&self.blocks[*idx as usize])
+                        && score(*idx) > 0.0
                 })
                 .collect();
             rest.sort_by(by_score);
             for idx in rest {
-                let kind = if semantic.is_some() && bm.get(&idx).copied().unwrap_or(0.0) == 0.0 {
-                    HitKind::Vector
-                } else {
-                    HitKind::Sparse
-                };
+                let kind = HitKind::Sparse;
                 out.push(self.hit(&self.blocks[idx as usize], kind));
                 if out.len() >= top_k {
                     break;
@@ -626,7 +580,12 @@ impl KnowledgeBase {
             breadcrumb,
             params: node.params.clone(),
             params_need_render: node.params_need_render,
-            url: format!("{DETAIL_URL}/{}", node.path_id),
+            url: self
+                .docs
+                .iter()
+                .find(|doc| doc.path_id == node.path_id)
+                .map(|doc| doc.url.clone())
+                .unwrap_or_else(|| format!("{DETAIL_URL}/{}", node.path_id)),
         }
     }
 }

@@ -11,19 +11,19 @@ const manifest = JSON.parse(await readFile(path.join(packageRoot, 'manifest.json
 const checksums = JSON.parse(await readFile(path.join(packageRoot, 'checksums.json'), 'utf8'))
 if (
   manifest.manifestVersion !== 3
-  || manifest.id !== 'knowledge_library'
+  || manifest.id !== 'wla_knowledge_library'
   || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[0-9A-Za-z.-]+)?$/.test(manifest.version ?? '')
   || manifest.platform?.os !== 'windows'
   || manifest.platform?.architecture !== 'x86_64'
   || manifest.platform?.abi !== 'msvc'
-  || manifest.backend?.entry !== 'backend/wonderland-knowledge-library.exe'
+  || manifest.backend?.entry !== 'backend/wla_knowledge_library.exe'
 ) {
-  throw new Error('Release package contains invalid knowledge_library manifest metadata.')
+  throw new Error('Release package contains invalid wla_knowledge_library manifest metadata.')
 }
 if (checksums.algorithm !== 'sha256' || !Array.isArray(checksums.files) || checksums.files.length === 0) {
   throw new Error('Release package contains an invalid checksums.json.')
 }
-const expectedEntries = [manifest.ui?.entry, manifest.backend?.entry, manifest.contract, 'backend/mcp-knowledge.exe']
+const expectedEntries = [manifest.ui?.entry, manifest.backend?.entry, manifest.contract, 'backend/wla_knowledge_mcp.exe']
 if (expectedEntries.some((entry) => typeof entry !== 'string')) {
   throw new Error('Release package manifest or MCP entry metadata is incomplete.')
 }
@@ -67,4 +67,4 @@ for (const entry of checksums.files) {
   const hash = createHash('sha256').update(bytes).digest('hex')
   if (hash !== entry.sha256) throw new Error(`Checksum mismatch for ${entry.path}.`)
 }
-console.log(`Verified knowledge_library v${manifest.version} package checksums.`)
+console.log(`Verified wla_knowledge_library v${manifest.version} package checksums.`)

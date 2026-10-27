@@ -20,7 +20,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: core/plugins/knowledge_library
+        working-directory: core/plugins/wla_knowledge_library
     steps:
       - name: Require the verified Core SDK commit
         shell: pwsh
@@ -38,7 +38,7 @@ jobs:
       - name: Checkout plugin
         uses: actions/checkout@v7
         with:
-          path: core/plugins/knowledge_library
+          path: core/plugins/wla_knowledge_library
           persist-credentials: false
 
       - name: Set up pnpm
@@ -54,7 +54,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: |
             core/pnpm-lock.yaml
-            core/plugins/knowledge_library/pnpm-lock.yaml
+            core/plugins/wla_knowledge_library/pnpm-lock.yaml
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.98.1
@@ -79,7 +79,10 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Run Rust tests
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --all-features --locked
+
+      - name: Check generated UI bindings
+        run: cargo run --locked --features bindings --example generate_bindings -- --check
 
       - name: Build release package
         run: pnpm run build:release
@@ -109,6 +112,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: knowledge-library-package
-          path: core/plugins/knowledge_library/target/knowledge_library-*.wplug
+          path: core/plugins/wla_knowledge_library/target/wla_knowledge_library-*.wplug
           if-no-files-found: error
           retention-days: 7

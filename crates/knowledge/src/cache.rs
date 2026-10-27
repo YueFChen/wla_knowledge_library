@@ -4,7 +4,7 @@
 //! `headingsMap.json` / `textMap.json` 已不再需要。目录是一份小 JSON，单文件原子替换就够。
 //!
 //! 跨进程约定（GUI 与 MCP 二进制共享同一份缓存，ADR-010）：
-//! - 目录：<app_data>/plugin-data/knowledge_library，由 Core 作为插件私有数据目录注入；
+//! - 目录：<app_data>/plugin-data/wla_knowledge_library，由 Core 作为插件私有数据目录注入；
 //! - 写入：由知识库插件经 Core 网络能力取得目录后，先写同目录临时文件再 `rename` 覆盖；
 //! - 读取：整文件读完即关闭，遇到 `schema_version` 不匹配按"没有缓存"处理，避免拿旧结构跑新代码。
 
@@ -67,7 +67,7 @@ impl KnowledgeCache {
         Self { dir }
     }
 
-    /// Default location: app-data/plugin-data/knowledge_library.
+    /// Default location: app-data/plugin-data/wla_knowledge_library.
     ///
     /// WONDERLAND_APP_DATA_DIR can override the application data directory for development and tests.
     pub fn for_plugin_data() -> Self {
@@ -76,7 +76,11 @@ impl KnowledgeCache {
 
     /// MCP locates plugin data here; the desktop backend uses the same path injected by Core.
     pub fn in_plugin_data(app_data_dir: &Path) -> Self {
-        Self::new(app_data_dir.join("plugin-data").join("knowledge_library"))
+        Self::new(
+            app_data_dir
+                .join("plugin-data")
+                .join("wla_knowledge_library"),
+        )
     }
 
     pub fn dir(&self) -> &Path {
@@ -208,7 +212,7 @@ mod tests {
         let cache = KnowledgeCache::in_plugin_data(app_data);
         assert_eq!(
             cache.dir(),
-            app_data.join("plugin-data").join("knowledge_library")
+            app_data.join("plugin-data").join("wla_knowledge_library")
         );
     }
 

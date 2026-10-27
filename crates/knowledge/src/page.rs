@@ -90,6 +90,10 @@ pub enum ListKind {
 #[cfg_attr(feature = "bindings", derive(ts_rs::TS))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PageElement {
+    Code {
+        language: String,
+        text: String,
+    },
     /// 标题；`anchor` 是官方页面里的标题 `id`，用于跳回原文。
     Heading {
         level: u8,

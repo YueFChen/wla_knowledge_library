@@ -1,6 +1,6 @@
 [package]
 name = "wonderland-knowledge"
-description = "知识库检索、页面镜像与本地向量能力；不依赖桌面 Core 或直接联网。"
+description = "多库资料、关键词检索与用户自选本机嵌入服务。"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,8 +14,16 @@ tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
-# 本地 ONNX 向量召回。关闭 FastEmbed 的 Hugging Face 下载器，模型文件只从应用缓存目录加载。
-fastembed = { version = "5.8.1", default-features = false, features = ["ort-download-binaries"] }
+sha2 = "0.10"
+reqwest = { version = "0.13", features = ["json", "stream"] }
+wonderland-secret = { path = "../../../../crates/secret" }
+url = "2"
+pulldown-cmark = "0.13"
+scraper = "0.24"
+encoding_rs = "0.8"
+flate2 = "1"
+brotli = "8"
+zip = { version = "8", default-features = false, features = ["deflate"] }
 # 页面元素模型要生成 TS 绑定（由插件侧的生成器统一产出），与内核同一做法：可选依赖 + feature。
 ts-rs = { workspace = true, optional = true }
 

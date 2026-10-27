@@ -81,7 +81,7 @@ struct NodeHead {
 }
 
 /// 把一篇镜像按元素顺序切成块，并抽出节点条目。
-fn build_page(doc: &Doc, page: &MirroredPage) -> (Vec<Block>, Vec<NodeEntry>, usize) {
+pub(crate) fn build_page(doc: &Doc, page: &MirroredPage) -> (Vec<Block>, Vec<NodeEntry>, usize) {
     let mut blocks: Vec<Block> = Vec::new();
     let mut node_heads: Vec<NodeHead> = Vec::new();
     // 标题层级栈：缺中间层级时保留"空洞"，标题路径只取实际存在的层级。
@@ -90,6 +90,14 @@ fn build_page(doc: &Doc, page: &MirroredPage) -> (Vec<Block>, Vec<NodeEntry>, us
 
     for element in &page.elements {
         match element {
+            PageElement::Code { text, .. } => push(
+                &mut blocks,
+                &mut chars,
+                doc,
+                &stack,
+                text.clone(),
+                Vec::new(),
+            ),
             PageElement::Heading {
                 level,
                 text,

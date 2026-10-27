@@ -1,12 +1,12 @@
 {
   "manifestVersion": 3,
-  "id": "knowledge_library",
-  "name": "千星奇域知识库",
-  "version": "0.2.2",
-  "description": "知识库检索、文档浏览、本地向量模型与外部 MCP。",
+  "id": "wla_knowledge_library",
+  "name": "知识库",
+  "version": "0.3.0",
+  "description": "独立多库、资料构建、中英文检索与本地只读 MCP。",
   "icon": "book-open-check",
   "hostCompatibility": {
-    "minCoreVersion": "0.2.0",
+    "minCoreVersion": "0.2.1",
     "maxCoreVersionExclusive": "0.3.0",
     "protocol": {
       "minVersion": "1.0.0",
@@ -31,14 +31,14 @@
       {
         "id": "main",
         "kind": "activity",
-        "title": "千星奇域知识库",
+        "title": "知识库",
         "icon": "book-open-check",
         "defaultOrder": 600
       }
     ]
   },
   "backend": {
-    "entry": "backend/wonderland-knowledge-library.exe",
+    "entry": "backend/wla_knowledge_library.exe",
     "transport": "stdio-ndjson-v1",
     "supportsServiceContext": true,
     "activation": "on_demand"

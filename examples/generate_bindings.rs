@@ -1,47 +1,25 @@
 use ts_rs::{Config, TS};
-use wonderland_knowledge_library::*;
-
-const HEADER: &str = "// Generated from Rust by examples/generate_bindings.rs. Do not edit.\n";
-
+use wonderland_knowledge::{ListKind, PageCell, PageElement, PageRun};
 fn main() {
     let cfg = Config::default();
-    let mut out = String::from(HEADER);
-    macro_rules! emit { ($($t:ty),*) => { $(out.push_str("export ");out.push_str(&<$t>::decl(&cfg));out.push('\n');)* }; }
-    emit!(
-        KnowledgeStatus,
-        KnowledgeEmbeddingStatus,
-        KnowledgeModelInfo,
-        KnowledgeHit,
-        KnowledgeNodeCandidate,
-        KnowledgeDocBrief,
-        KnowledgeDocGroup,
-        KnowledgeDocText,
-        KnowledgeSearchGroup,
-        KnowledgeNodeGroup,
-        KnowledgeRefreshReport,
-        KnowledgeMirrorStatus,
-        MirroredPage,
-        PageElement,
-        PageRun,
-        PageCell,
-        ListKind,
-        MirrorProgress,
-        MirrorRun
-    );
-    out = out
+    let mut output =
+        String::from("// Generated from Rust by examples/generate_bindings.rs. Do not edit.\n");
+    macro_rules! emit { ($($t:ty),*) => { $(output.push_str("export ");output.push_str(&<$t>::decl(&cfg));output.push('\n');)* }; }
+    emit!(PageElement, PageRun, PageCell, ListKind);
+    output = output
         .lines()
         .map(str::trim_end)
         .collect::<Vec<_>>()
         .join("\n")
         + "\n";
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("ui/src/types.generated.ts");
-    if std::env::args().any(|a| a == "--check") {
+    if std::env::args().any(|value| value == "--check") {
         assert_eq!(
-            std::fs::read_to_string(path).expect("generated file"),
-            out,
-            "Bindings drift: regenerate bindings"
+            std::fs::read_to_string(path).expect("generated types"),
+            output,
+            "Bindings drift"
         );
     } else {
-        std::fs::write(path, out).unwrap();
+        std::fs::write(path, output).unwrap();
     }
 }

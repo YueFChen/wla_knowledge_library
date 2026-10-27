@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('The knowledge_library package currently targets Windows x86_64 MSVC.')
+if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('The wla_knowledge_library package currently targets Windows x86_64 MSVC.')
 function run(command, args) {
   const useWindowsShim = process.platform === 'win32' && command === 'pnpm'
   const commandName = useWindowsShim ? (process.env.ComSpec ?? 'cmd.exe') : command
@@ -20,7 +20,7 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 run('pnpm', ['--dir', 'ui', 'run', 'build'])
-run('cargo', ['build', '--locked', '--package', 'wonderland-knowledge-library', '--bin', 'wonderland-knowledge-library', '--package', 'wonderland-mcp-knowledge', '--bin', 'mcp-knowledge'])
+run('cargo', ['build', '--locked', '--package', 'wla_knowledge_library', '--bin', 'wla_knowledge_library', '--package', 'wla_knowledge_mcp', '--bin', 'wla_knowledge_mcp'])
 
 const targetRoot = path.resolve(root, 'target')
 const output = path.resolve(targetRoot, 'knowledge-library-plugin')
@@ -32,7 +32,7 @@ await mkdir(path.join(output, 'backend'), { recursive: true })
 await cp(path.join(packageRoot, 'manifest.json'), path.join(output, 'manifest.json'))
 await cp(path.join(packageRoot, 'contract.json'), path.join(output, 'contract.json'))
 await cp(path.join(root, 'ui', 'dist'), path.join(output, 'ui'), { recursive: true })
-await cp(path.join(targetRoot, 'debug', 'wonderland-knowledge-library.exe'), path.join(output, 'backend', 'wonderland-knowledge-library.exe'))
-await cp(path.join(targetRoot, 'debug', 'mcp-knowledge.exe'), path.join(output, 'backend', 'mcp-knowledge.exe'))
+await cp(path.join(targetRoot, 'debug', 'wla_knowledge_library.exe'), path.join(output, 'backend', 'wla_knowledge_library.exe'))
+await cp(path.join(targetRoot, 'debug', 'wla_knowledge_mcp.exe'), path.join(output, 'backend', 'wla_knowledge_mcp.exe'))
 await finishPackage({root,stage:output})
 console.log('Debug plugin package created.')

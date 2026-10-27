@@ -1,480 +1,273 @@
-//! 只读工具面：结构化查询、普通检索、规划式 RAG 与 Lua API 定向检索。
-//!
-//! 三条硬约束（调研 §13.3、ADR-010）：
-//! 1. **全部只读**：`readOnlyHint: true`、无副作用、不接触密钥；
-//! 2. **输入与输出都要声明 schema**（对外暴露的 Tool 强制，ADR-010）；
-//! 3. **局限声明写在 description 里**——外部客户端的体验我们控制不了，工具描述是唯一通道：
-//!    正文图片只记地址不落盘、可能落后官网、未命中就回"知识库中没有"、
-//!    **查询失败不等于没有资料**、**没镜像的篇目不在索引里**。
-//!
-//! 内容源是页面镜像：节点参数与检索命中均保留表格行列结构，作为 RAG 上下文返回。
-//! `rag_search` 的复杂检索路由由知识库插件规划；这里仅负责 MCP 参数校验与协议结果封装。
-
 use serde_json::{Value, json};
-use wonderland_knowledge::{KnowledgeBase, NodeFilters, Side};
-use wonderland_knowledge_library::plan_rag_search;
+use wonderland_knowledge::{NodeFilters, SearchFilters, Side, workspace::Workspace};
 
-/// 工具清单（`tools/list` 的返回体）。
 pub fn list() -> Value {
-    let mut result = json!({
-        "tools": [
-            {
-                "name": "get_node",
-                "description": "按节点名查千星奇域节点说明和参数。可按服务端/客户端及节点图类别筛选，支持子串与子序列匹配和批量查询。结构化节点查询优先于通用 search。参数表含表头行；同名节点会返回所有符合筛选条件的候选及来源，不会替调用方猜选。",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "names": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "节点名列表（如「建立字典」「受到攻击时」），多个节点合并为一次调用"
-                        },
-                        "side": { "type": "string", "enum": ["server", "client"], "description": "可选归属端过滤；双端节点会同时包含" },
-                        "node_graph": { "type": "string", "description": "可选节点图类别过滤，例如角色技能节点图" }
-                    },
-                    "required": ["names"],
-                    "additionalProperties": false
-                },
-                "outputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "results": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "query": { "type": "string" },
-                                    "matches": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "name": { "type": "string" },
-                                                "path_id": { "type": "string" },
-                                                "doc_title": { "type": "string" },
-                                                "breadcrumb": { "type": "array", "items": { "type": "string" } },
-                                                "anchor": { "type": "string" },
-                                                "side": { "type": ["string", "null"], "description": "server / client / both" },
-                                                "node_graph": { "type": ["string", "null"] },
-                                                "params": {
-                                                    "type": "array",
-                                                    "description": "参数表（含表头行，来自官方页面镜像）；没取到参数表时为空数组",
-                                                    "items": { "type": "array", "items": { "type": "string" } }
-                                                },
-                                                "params_need_render": { "type": "boolean", "description": "true = 镜像里没有参数表，需对照原文" },
-                                                "url": { "type": "string" }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "annotations": { "title": "节点查询", "readOnlyHint": true, "openWorldHint": false }
-            },
-            {
-                "name": "list_docs",
-                "description": "列出千星奇域知识库里的官方文档标题（不含正文），用于确认是否收录相关文档或消歧文档名称。不传 keywords 则列出当前目录里的全部标题。",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "keywords": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "过滤关键词列表，对标题做子串 / 子序列匹配；省略或空数组表示全部"
-                        }
-                    },
-                    "additionalProperties": false
-                },
-                "outputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "results": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "keyword": { "type": "string" },
-                                    "total": { "type": "integer" },
-                                    "docs": { "type": "array", "items": { "type": "object" } }
-                                }
-                            }
-                        }
-                    }
-                },
-                "annotations": { "title": "文档清单", "readOnlyHint": true, "openWorldHint": false }
-            },
-            {
-                "name": "read_doc",
-                "description": "按 path_id 或标题读取千星奇域官方文档（可从一个锚点开始），返回分块正文、标题层级路径和结构化表格。**不做截断**；正文来自官方页面镜像，正文图片只记地址、不落盘。**没镜像的篇目不在知识库索引里**，此时会提示没有匹配的文档。",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "key": { "type": "string", "description": "文档 path_id（如 mhw66orrrfkm）或标题（如「仇恨配置」）" },
-                        "from_anchor": { "type": "string", "description": "可选的起始锚点，用于从某一段开始读" }
-                    },
-                    "required": ["key"],
-                    "additionalProperties": false
-                },
-                "outputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "path_id": { "type": "string" },
-                        "title": { "type": "string" },
-                        "url": { "type": "string" },
-                        "has_tables": { "type": "boolean", "description": "该篇是否含结构化表格" },
-                        "blocks": { "type": "array", "items": { "type": "object" } }
-                    }
-                },
-                "annotations": { "title": "读文档", "readOnlyHint": true, "openWorldHint": false }
-            },
-            {
-                "name": "rag_search",
-                "description": "检索千星奇域本地官方页面镜像，为回答提供带出处的资料上下文。直接用中文自然语言描述问题；知识库先宽泛检索，再依据实际命中的目录、节点图、端侧与表格分布决定是否补充定向检索，并合并结果。返回标题路径、锚点、原文链接及表格结构。节点名明确时优先用 get_node，文档明确时用 read_doc。镜像可能落后官网，未镜像篇目不进正文索引。空结果表示本地索引未命中；工具报错不表示没有资料。",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "queries": {
-                            "type": "array",
-                            "items": { "type": "string" },
-                            "description": "自然语言问题列表，越具体越准；多个独立问题合并为一次调用"
-                        },
-                        "top_k": {
-                            "type": "integer",
-                            "minimum": 1,
-                            "maximum": 20,
-                            "description": "每个查询最多返回多少条，默认 5"
-                        },
-                    },
-                    "required": ["queries"],
-                    "additionalProperties": false
-                },
-                "outputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "results": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "query": { "type": "string" },
-                                    "hits": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "path_id": { "type": "string" },
-                                                "doc_title": { "type": "string" },
-                                                "breadcrumb": { "type": "array", "items": { "type": "string" } },
-                                                "anchor": { "type": "string" },
-                                                "side": { "type": ["string", "null"] },
-                                                "node_graph": { "type": ["string", "null"] },
-                                                "updated_at": { "type": ["string", "null"] },
-                                                "url": { "type": "string" },
-                                                "text": { "type": "string" },
-                                                "table": { "type": "array", "description": "命中块的结构化表格；非表格块为空数组", "items": { "type": "array", "items": { "type": "string" } } }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "annotations": { "title": "知识库 RAG 检索", "readOnlyHint": true, "openWorldHint": false }
-            }
-        ]
-    });
-    let rag = result["tools"][3].clone();
-    let mut basic = rag.clone();
-    basic["name"] = json!("search");
-    basic["description"] = json!(
-        "在千星奇域本地官方页面镜像中执行基础稀疏检索，不进行场景化多路规划。适合直接查找已知概念或获取基础候选。开放式问题或需要按命中内容追加定向检索时使用 rag_search；节点名明确时优先用 get_node。结果含文档路径、锚点、原文链接与表格结构。镜像可能落后官网，未镜像篇目不进正文索引。"
-    );
-    basic["annotations"]["title"] = json!("基础检索");
-    basic["inputSchema"]["properties"]["queries"]["description"] =
-        json!("一个或多个关键词、名称或简短查询句");
-    let mut rag = rag;
-    rag["description"] = json!(
-        "在千星奇域本地官方文档中检索开放问题与排障线索。先宽泛检索，再根据命中内容补充定向检索并合并结果。返回标题路径、锚点、原文链接及表格结构。节点名明确时优先用 get_node，文档明确时用 read_doc。镜像可能落后官网，未镜像篇目不进正文索引；空结果表示本地索引未命中，工具报错不表示没有资料。"
-    );
-    let mut lua = rag.clone();
-    lua["name"] = json!("search_lua_api");
-    lua["description"] = json!(
-        "专门检索千星奇域《客户端控件API文档》中的界面脚本接口（Lua），包括接口名称、函数签名、参数、返回值、类型、字段、方法和枚举。优先返回接口表格，只在表格未命中时回退到该文档正文。可传入接口标识符或具体问题；不会从其他教程文档扩展结果。结果含原文锚点和链接。"
-    );
-    lua["annotations"]["title"] = json!("Lua 接口检索");
-    lua["inputSchema"]["properties"]["queries"]["description"] =
-        json!("Lua API 名称、函数/方法名、类型名或描述该接口用途的问题，可批量提交");
-    lua["outputSchema"]["properties"]["source"] =
-        json!({ "type": "string", "description": "命中的专用 API 文档标题" });
-    let tools = result["tools"].as_array_mut().expect("tools array");
-    tools[3] = basic;
-    tools.push(rag);
-    tools.push(lua);
-    result
+    let strings = json!({"type":"array","items":{"type":"string","minLength":1,"maxLength":8192},"minItems":1,"maxItems":20});
+    let libraries =
+        json!({"type":"array","items":{"type":"string","maxLength":160},"maxItems":100});
+    let specs = [
+        (
+            "list_libraries",
+            "列出已显式暴露的知识库。新建库默认不暴露。",
+            json!({}),
+            vec![],
+        ),
+        (
+            "list_docs",
+            "列出已暴露库的文档及出处，可用 keywords 筛选标题。",
+            json!({"library_ids":libraries,"keywords":strings,"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}}),
+            vec![],
+        ),
+        (
+            "read_doc",
+            "按文档 ID 或完整标题读取原文块；同名文档整组返回并标明所属库。offset/limit 为正文字符分页。",
+            json!({"library_ids":libraries,"key":{"type":"string","minLength":1,"maxLength":8192},"from_anchor":{"type":"string","maxLength":256},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":50000}}),
+            vec!["key"],
+        ),
+        (
+            "search",
+            "检索已暴露库，结合关键词及已构建的本地语义索引，返回片段、库和出处。",
+            json!({"library_ids":libraries,"queries":strings,"top_k":{"type":"integer","minimum":1,"maximum":20}}),
+            vec!["queries"],
+        ),
+        (
+            "rag_search",
+            "开放问题、方案分析和排障检索；使用共同的混合召回及基于实际命中的补充检索。返回资料证据，不生成答案。",
+            json!({"library_ids":libraries,"queries":strings,"top_k":{"type":"integer","minimum":1,"maximum":20}}),
+            vec!["queries"],
+        ),
+        (
+            "get_node",
+            "千星预设扩展：按节点名查说明、端侧及参数表，同名候选整组返回。只访问已暴露的千星资料源。",
+            json!({"library_ids":libraries,"names":strings,"side":{"enum":["server","client"]},"node_graph":{"type":"string","maxLength":256}}),
+            vec!["names"],
+        ),
+        (
+            "search_lua_api",
+            "千星预设扩展：定向检索客户端 Lua API 文档中的函数与参数表。",
+            json!({"library_ids":libraries,"queries":strings,"top_k":{"type":"integer","minimum":1,"maximum":20}}),
+            vec!["queries"],
+        ),
+    ];
+    json!({"tools":specs.into_iter().map(|(name,description,properties,required)|json!({"name":name,"description":description,
+        "inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},
+        "outputSchema":{"type":"object","properties":{"results":{"type":"array"},"warnings":{"type":"array","items":{"type":"string"}}},"required":["results","warnings"],"additionalProperties":false},
+        "annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}
+    })).collect::<Vec<_>>()})
 }
-
-/// 工具执行。错误按 MCP 约定**放进结果里**（`isError: true`），而不是协议级错误，
-/// 这样模型能看到失败原因并换词重试（调研 §6.4 的"查询失败 ≠ 没有资料"）。
-pub fn call(kb: &KnowledgeBase, name: &str, arguments: &Value) -> Result<Value, String> {
-    let arguments = if arguments.is_null() {
-        &json!({})
-    } else {
-        arguments
+fn strings(args: &Value, key: &str, required: bool) -> Result<Vec<String>, String> {
+    let values = match args.get(key) {
+        Some(value) => serde_json::from_value::<Vec<String>>(value.clone())
+            .map_err(|_| format!("{key} 必须为字符串数组"))?,
+        None => vec![],
     };
-    let result = match name {
-        "get_node" => get_node(kb, arguments)?,
-        "list_docs" => list_docs(kb, arguments)?,
-        "read_doc" => read_doc(kb, arguments)?,
-        "search" => search(kb, arguments)?,
-        "rag_search" => rag_search(kb, arguments)?,
-        "search_lua_api" => search_lua_api(kb, arguments)?,
-        other => return Err(format!("未知工具：{other}")),
-    };
-    let text = result.to_string();
-    Ok(json!({
-        "content": [{ "type": "text", "text": text }],
-        "structuredContent": result
-    }))
-}
-
-fn strings(args: &Value, field: &str) -> Option<Vec<String>> {
-    args.get(field)?.as_array().map(|items| {
-        items
+    if values.len() > 100
+        || values
             .iter()
-            .filter_map(|item| item.as_str().map(str::to_owned))
-            .collect()
-    })
-}
-
-/// 取必填的非空字符串列表；空数组按"没有可用输入"处理（服务端无法回答空查询）。
-fn required_strings(args: &Value, field: &str) -> Result<Vec<String>, String> {
-    let values = strings(args, field).unwrap_or_default();
-    if values.is_empty() || values.iter().any(|value| value.trim().is_empty()) {
-        return Err(format!("{field} 至少要有一个非空项"));
+            .any(|value| value.trim().is_empty() || value.len() > 8192)
+        || (required && values.is_empty())
+    {
+        return Err(format!("{key} 参数无效"));
     }
     Ok(values)
 }
-
-fn get_node(kb: &KnowledgeBase, args: &Value) -> Result<Value, String> {
-    let names = required_strings(args, "names")?;
-    let filters = NodeFilters {
-        side: parse_side(args.get("side"))?,
-        node_graph: optional_string(args, "node_graph")?,
-    };
-    let results = kb.get_node_scoped(&names, &filters);
-    Ok(json!({ "results": results }))
-}
-
-fn list_docs(kb: &KnowledgeBase, args: &Value) -> Result<Value, String> {
-    let keywords = strings(args, "keywords").unwrap_or_default();
-    Ok(json!({ "results": kb.list_docs(&keywords) }))
-}
-
-fn read_doc(kb: &KnowledgeBase, args: &Value) -> Result<Value, String> {
-    let key = args
-        .get("key")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|key| !key.is_empty())
-        .ok_or_else(|| "key 不能为空".to_owned())?;
-    let from_anchor = args.get("from_anchor").and_then(Value::as_str);
-    match kb.read_doc(key, from_anchor) {
-        Some(doc) => Ok(json!(doc)),
-        None => Err(format!("知识库中没有标题或 path_id 匹配「{key}」的文档")),
-    }
-}
-
-fn search(kb: &KnowledgeBase, args: &Value) -> Result<Value, String> {
-    let queries = required_strings(args, "queries")?;
-    let top_k = top_k(args)?;
-    let hits = kb.search(&queries, top_k);
-    let results: Vec<Value> = queries
-        .iter()
-        .zip(hits)
-        .map(|(query, hits)| json!({ "query": query, "hits": hits }))
-        .collect();
-    Ok(json!({ "results": results }))
-}
-
-fn rag_search(kb: &KnowledgeBase, args: &Value) -> Result<Value, String> {
-    let queries = required_strings(args, "queries")?;
-    let top_k = top_k(args)?;
-    let hits = plan_rag_search(kb, &queries, top_k);
-    let results: Vec<Value> = queries
-        .iter()
-        .zip(hits)
-        .map(|(query, hits)| json!({ "query": query, "hits": hits }))
-        .collect();
-    Ok(json!({ "results": results }))
-}
-
-fn search_lua_api(kb: &KnowledgeBase, args: &Value) -> Result<Value, String> {
-    let queries = required_strings(args, "queries")?;
-    let top_k = top_k(args)?;
-    let api_doc = kb
-        .docs()
-        .iter()
-        .find(|doc| doc.title.contains("客户端") && doc.title.to_ascii_lowercase().contains("api"))
-        .ok_or_else(|| {
-            "本地目录中没有客户端 Lua API 文档；请先更新目录并镜像该篇文档".to_owned()
-        })?;
-    let filters = wonderland_knowledge::SearchFilters {
-        doc_path_id: Some(api_doc.path_id.clone()),
-        tables_only: true,
-        ..Default::default()
-    };
-    let text_filters = wonderland_knowledge::SearchFilters {
-        tables_only: false,
-        ..filters.clone()
-    };
-    let results: Vec<Value> = queries
-        .iter()
-        .map(|query| {
-            let table_hits = kb
-                .search_scoped(std::slice::from_ref(query), top_k, &filters)
-                .remove(0);
-            let hits = if table_hits.is_empty() {
-                kb.search_scoped(std::slice::from_ref(query), top_k, &text_filters)
-                    .remove(0)
-            } else {
-                table_hits
-            };
-            json!({ "query": query, "hits": hits })
-        })
-        .collect();
-    Ok(json!({ "source": api_doc.title, "results": results }))
-}
-
-fn top_k(args: &Value) -> Result<usize, String> {
-    match args.get("top_k").and_then(Value::as_i64) {
-        Some(value) if (1..=20).contains(&value) => Ok(value as usize),
-        Some(value) => Err(format!("top_k 必须在 1–20 之间，收到 {value}")),
-        None => Ok(5),
-    }
-}
-
-fn optional_string(args: &Value, field: &str) -> Result<Option<String>, String> {
-    match args.get(field) {
-        None | Some(Value::Null) => Ok(None),
+fn count(args: &Value, key: &str, default: usize, max: usize) -> Result<usize, String> {
+    match args.get(key) {
+        None => Ok(default),
         Some(value) => value
-            .as_str()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(|value| Some(value.to_owned()))
-            .ok_or_else(|| format!("{field} 必须是非空字符串")),
+            .as_u64()
+            .filter(|value| *value > 0 && *value <= max as u64)
+            .map(|value| value as usize)
+            .ok_or_else(|| format!("{key} 范围应为 1–{max}")),
     }
 }
 
-fn parse_side(value: Option<&Value>) -> Result<Option<Side>, String> {
-    match value.and_then(Value::as_str).map(str::trim) {
-        None | Some("") => Ok(None),
-        Some("server") => Ok(Some(Side::Server)),
-        Some("client") => Ok(Some(Side::Client)),
-        Some(other) => Err(format!("side 仅支持 server 或 client，收到 {other}")),
+pub fn call(workspace: &Workspace, name: &str, args: &Value) -> Result<Value, String> {
+    let schema = list();
+    let spec = schema["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == name)
+        .ok_or("未知工具")?;
+    let object = args.as_object().ok_or("工具参数应为对象")?;
+    if object
+        .keys()
+        .any(|key| spec["inputSchema"]["properties"].get(key).is_none())
+    {
+        return Err("包含不支持的参数".into());
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// 极简夹具：只验工具的参数校验与返回结构，不重复 knowledge 的检索用例。
-    fn empty_kb() -> KnowledgeBase {
-        wonderland_knowledge::build_from_json("[]", &[]).unwrap()
-    }
-
-    #[test]
-    fn tool_list_declares_schemas_and_read_only() {
-        let tools = list();
-        let items = tools["tools"].as_array().unwrap();
-        let names: Vec<&str> = items
-            .iter()
-            .map(|tool| tool["name"].as_str().unwrap())
-            .collect();
-        assert_eq!(
-            names,
-            vec![
-                "get_node",
-                "list_docs",
-                "read_doc",
-                "search",
-                "rag_search",
-                "search_lua_api"
-            ]
-        );
-        for tool in items {
-            assert!(
-                tool["inputSchema"].is_object(),
-                "{} 缺 inputSchema",
-                tool["name"]
-            );
-            assert!(
-                tool["outputSchema"].is_object(),
-                "{} 缺 outputSchema",
-                tool["name"]
-            );
-            assert_eq!(tool["annotations"]["readOnlyHint"], json!(true));
-            let description = tool["description"].as_str().unwrap();
-            assert!(
-                description.contains("千星") || description.contains("知识库"),
-                "描述要写清资料来源：{}",
-                tool["name"]
-            );
+    let ids = strings(args, "library_ids", false)?;
+    let libraries = workspace.scope(&ids, true)?;
+    let mut results = Vec::new();
+    let mut warnings = Vec::new();
+    match name {
+        "list_libraries" => {
+            for library in &libraries {
+                results.push(json!({"library_id":library.id,"name":library.name,"preset_id":library.preset_id}));
+            }
         }
-        let get_node = &items[0];
-        let result_item = &get_node["outputSchema"]["properties"]["results"]["items"];
-        assert!(
-            result_item["properties"]["matches"].is_object(),
-            "get_node 的 schema 必须与 NodeLookup 实际序列化字段一致"
-        );
-        assert!(result_item["properties"]["candidates"].is_null());
+        "search" | "rag_search" => {
+            let queries = strings(args, "queries", true)?;
+            if queries.len() > 20 {
+                return Err("每次最多 20 个查询".into());
+            }
+            let top = count(args, "top_k", 5, 20)?;
+            for query in queries {
+                let found = workspace.search(&ids, &query, top, true)?;
+                warnings.extend(found.warnings);
+                results.push(json!({"query":query,"hits":found.hits}));
+            }
+        }
+        "list_docs" => {
+            let keywords = strings(args, "keywords", false)?;
+            for library in &libraries {
+                let documents = workspace.documents(&library.id, true)?;
+                for document in documents.as_array().ok_or("文档清单无效")? {
+                    if keywords.is_empty()
+                        || keywords.iter().any(|keyword| {
+                            document["title"]
+                                .as_str()
+                                .unwrap_or_default()
+                                .to_lowercase()
+                                .contains(&keyword.to_lowercase())
+                        })
+                    {
+                        results.push(document.clone());
+                    }
+                }
+            }
+            let offset = args.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
+            results = results
+                .into_iter()
+                .skip(offset)
+                .take(count(args, "limit", 50, 100)?)
+                .collect();
+        }
+        "read_doc" => {
+            let key = args
+                .get("key")
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .ok_or("key 不能为空")?;
+            let offset = args.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let limit = count(args, "limit", 20000, 50000)?;
+            for library in &libraries {
+                let snapshot = workspace.snapshot(library)?;
+                for document in snapshot
+                    .documents
+                    .iter()
+                    .filter(|document| document.id == key || document.title == key)
+                {
+                    let kb = workspace.knowledge_base(library)?;
+                    if let Some(mut text) = kb.read_doc(
+                        &document.id,
+                        args.get("from_anchor").and_then(Value::as_str),
+                    ) {
+                        let mut skip = offset;
+                        let mut remaining = limit;
+                        let mut truncated = false;
+                        text.blocks.retain_mut(|block| {
+                            let length = block.text.chars().count();
+                            if skip >= length {
+                                skip -= length;
+                                return false;
+                            }
+                            let content = block
+                                .text
+                                .chars()
+                                .skip(skip)
+                                .take(remaining)
+                                .collect::<String>();
+                            skip = 0;
+                            let used = content.chars().count();
+                            truncated |= used < length;
+                            remaining -= used;
+                            block.text = content;
+                            !block.text.is_empty()
+                        });
+                        results.push(json!({"library_id":library.id,"library_name":library.name,"document":text,"offset":offset,"next_offset":if truncated||remaining==0{Some(offset+limit)}else{None}}));
+                    }
+                }
+            }
+            if results.is_empty() {
+                return Err("已暴露的知识库中未找到该文档，请先使用 list_docs 确认文档 ID".into());
+            }
+        }
+        "get_node" | "search_lua_api" => {
+            let values = strings(
+                args,
+                if name == "get_node" {
+                    "names"
+                } else {
+                    "queries"
+                },
+                true,
+            )?;
+            let side = match args.get("side").and_then(Value::as_str) {
+                None => None,
+                Some("server") => Some(Side::Server),
+                Some("client") => Some(Side::Client),
+                _ => return Err("side 仅支持 server/client".into()),
+            };
+            let top = count(args, "top_k", 5, 20)?;
+            for library in &libraries {
+                if !library
+                    .sources
+                    .iter()
+                    .any(|source| source.kind == "wonderland")
+                {
+                    continue;
+                }
+                let kb = workspace.knowledge_base(library)?;
+                if name == "get_node" {
+                    let found = kb.get_node_scoped(
+                        &values,
+                        &NodeFilters {
+                            side,
+                            node_graph: args
+                                .get("node_graph")
+                                .and_then(Value::as_str)
+                                .map(str::to_owned),
+                        },
+                    );
+                    results.push(
+                        json!({"library_id":library.id,"library_name":library.name,"nodes":found}),
+                    );
+                } else {
+                    let api_docs = kb
+                        .docs()
+                        .iter()
+                        .filter(|document| {
+                            document.title.contains("客户端")
+                                && document.title.to_ascii_lowercase().contains("api")
+                        })
+                        .collect::<Vec<_>>();
+                    if api_docs.is_empty() {
+                        warnings.push(format!("{} 尚未构建客户端 Lua API 文档", library.name));
+                    }
+                    for document in api_docs {
+                        let hits = kb.search_scoped(
+                            &values,
+                            top,
+                            &SearchFilters {
+                                doc_path_id: Some(document.path_id.clone()),
+                                ..SearchFilters::default()
+                            },
+                        );
+                        results.push(json!({"library_id":library.id,"library_name":library.name,"queries":values,"hits":hits}));
+                    }
+                }
+            }
+            if results.is_empty() && warnings.is_empty() {
+                return Err("请先在工作台构建千星预设资料并显式允许 MCP 访问".into());
+            }
+        }
+        _ => return Err("未知工具".into()),
     }
-
-    #[test]
-    fn empty_required_list_is_a_readable_error() {
-        let kb = empty_kb();
-        let error = call(&kb, "get_node", &json!({ "names": [] })).unwrap_err();
-        assert!(error.contains("names"));
-        let error = call(&kb, "search", &json!({ "queries": [""] })).unwrap_err();
-        assert!(error.contains("queries"));
+    // Reads recheck authorization after disk/model work as well as before it.
+    for library in &libraries {
+        workspace.library(&library.id, true)?;
     }
-
-    #[test]
-    fn top_k_out_of_range_is_rejected() {
-        let kb = empty_kb();
-        let error = call(&kb, "search", &json!({ "queries": ["x"], "top_k": 99 })).unwrap_err();
-        assert!(error.contains("1–20"));
-    }
-
-    #[test]
-    fn unknown_tool_and_missing_key_are_errors() {
-        let kb = empty_kb();
-        assert!(
-            call(&kb, "nope", &json!({}))
-                .unwrap_err()
-                .contains("未知工具")
-        );
-        assert!(
-            call(&kb, "read_doc", &json!({ "key": "  " }))
-                .unwrap_err()
-                .contains("key")
-        );
-    }
-
-    #[test]
-    fn successful_call_returns_text_and_structured_content() {
-        let kb = empty_kb();
-        let result = call(&kb, "list_docs", &json!({})).unwrap();
-        assert_eq!(result["content"][0]["type"], json!("text"));
-        assert!(
-            result["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("results")
-        );
-        assert!(result["structuredContent"]["results"].is_array());
-    }
+    Ok(json!({"results":results,"warnings":warnings}))
 }

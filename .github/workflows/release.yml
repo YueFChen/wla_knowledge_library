@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_commit }}
-          path: core/plugins/knowledge_library
+          path: core/plugins/wla_knowledge_library
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -47,14 +47,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: core
       - run: pnpm install --frozen-lockfile
-        working-directory: core/plugins/knowledge_library
+        working-directory: core/plugins/wla_knowledge_library
       - run: pnpm run typecheck
-        working-directory: core/plugins/knowledge_library
+        working-directory: core/plugins/wla_knowledge_library
       - run: cargo test --locked
-        working-directory: core/plugins/knowledge_library
+        working-directory: core/plugins/wla_knowledge_library
       - name: Build the complete signed package with the original identity
         run: pnpm run package:release
-        working-directory: core/plugins/knowledge_library
+        working-directory: core/plugins/wla_knowledge_library
         env:
           PLUGIN_UPDATE_SIGNING_KEY: ${{ secrets.PLUGIN_UPDATE_SIGNING_KEY }}
           PLUGIN_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_UPDATE_SIGNING_PUBLIC_KEY }}
@@ -65,19 +65,19 @@ jobs:
           PLUGIN_COMMIT: ${{ inputs.source_commit }}
           PLUGIN_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PLUGIN_UPDATE_SIGNING_PUBLIC_KEY }}
         run: |
-          $manifest = Get-Content -Raw 'core/plugins/knowledge_library/package/manifest.json' | ConvertFrom-Json
-          $file = "core/plugins/knowledge_library/target/$($manifest.id)-$($manifest.version)-windows-$($manifest.platform.architecture).wplug"
+          $manifest = Get-Content -Raw 'core/plugins/wla_knowledge_library/package/manifest.json' | ConvertFrom-Json
+          $file = "core/plugins/wla_knowledge_library/target/$($manifest.id)-$($manifest.version)-windows-$($manifest.platform.architecture).wplug"
           $result = node core/packages/plugin-tools/verify.mjs $file --signed
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $receipt = $result | ConvertFrom-Json
           $receipt | Add-Member -NotePropertyName coreCommit -NotePropertyValue $env:CORE_COMMIT
           $receipt | Add-Member -NotePropertyName sourceCommit -NotePropertyValue $env:PLUGIN_COMMIT
-          $receipt | ConvertTo-Json -Depth 50 | Set-Content -Encoding utf8 'core/plugins/knowledge_library/target/package-receipt.json'
+          $receipt | ConvertTo-Json -Depth 50 | Set-Content -Encoding utf8 'core/plugins/wla_knowledge_library/target/package-receipt.json'
       - uses: actions/upload-artifact@v4
         with:
-          name: signed-knowledge_library-${{ github.run_id }}
+          name: signed-wla_knowledge_library-${{ github.run_id }}
           path: |
-            core/plugins/knowledge_library/target/*.wplug
-            core/plugins/knowledge_library/target/package-receipt.json
+            core/plugins/wla_knowledge_library/target/*.wplug
+            core/plugins/wla_knowledge_library/target/package-receipt.json
           if-no-files-found: error
           retention-days: 14

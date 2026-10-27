@@ -21,9 +21,12 @@ pub mod dom;
 mod index;
 pub mod mirror;
 mod model;
+pub mod models;
 pub mod page;
+pub mod parsing;
+pub mod rag;
 pub mod render;
-mod vector;
+pub mod workspace;
 
 #[cfg(test)]
 mod page_tests;
@@ -38,9 +41,6 @@ pub use mirror::{
 };
 pub use model::*;
 pub use page::{ListKind, PAGE_SCHEMA_VERSION, PageCell, PageElement, PageRun};
-pub use vector::{
-    LOCAL_EMBEDDING_MODEL_DIR, LOCAL_EMBEDDING_MODEL_FILES, LOCAL_EMBEDDING_MODEL_ID,
-};
 
 use tracing::info;
 use wonderland_plugin_sdk::PluginFailure;
